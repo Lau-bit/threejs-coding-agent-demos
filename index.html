@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Download</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            overflow: hidden; 
+            background: #000;
+            font-family: 'Space Mono', monospace;
+        }
+        canvas { display: block; }
+        
+        #controls {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 24px 28px;
+            border-radius: 4px;
+            border: 1px solid rgba(120, 200, 255, 0.15);
+            box-shadow: 
+                0 0 40px rgba(100, 180, 255, 0.05),
+                inset 0 0 30px rgba(100, 180, 255, 0.02);
+            color: rgba(180, 220, 255, 0.8);
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+        }
+        
+        #controls h3 {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            color: rgba(150, 220, 255, 0.6);
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(100, 180, 255, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        #controls h3::before {
+            content: '◇';
+            color: rgba(255, 180, 220, 0.6);
+        }
+        
+        #controls label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 9px;
+        }
+        
+        #controls label span {
+            color: rgba(200, 230, 255, 0.5);
+            min-width: 40px;
+            text-align: right;
+            font-weight: 700;
+        }
+        
+        input[type="range"] {
+            width: 100px;
+            height: 2px;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, 
+                rgba(100, 180, 255, 0.3), 
+                rgba(255, 150, 200, 0.3), 
+                rgba(150, 255, 200, 0.3));
+            border-radius: 1px;
+            outline: none;
+            margin: 0 16px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #78d4ff, #ff9ed8);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 15px rgba(120, 212, 255, 0.5);
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+            box-shadow: 0 0 25px rgba(120, 212, 255, 0.8);
+        }
+        
+        #status {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            text-align: right;
+            z-index: 100;
+        }
+        
+        #status-title {
+            color: rgba(150, 220, 255, 0.3);
+            font-size: 9px;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        
+        #signal-strength {
+            display: flex;
+            gap: 3px;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+        }
+        
+        .signal-bar {
+            width: 4px;
+            background: linear-gradient(to top, rgba(100, 255, 200, 0.8), rgba(100, 200, 255, 0.8));
+            border-radius: 1px;
+            transition: height 0.3s ease;
+        }
+        
+        #data-stream {
+            color: rgba(150, 255, 200, 0.4);
+            font-size: 9px;
+            letter-spacing: 1px;
+            font-variant-numeric: tabular-nums;
+            height: 60px;
+            overflow: hidden;
+            text-align: right;
+        }
+        
+        .data-line {
+            opacity: 0;
+            animation: dataFade 2s ease-out forwards;
+        }
+        
+        @keyframes dataFade {
+            0% { opacity: 0; transform: translateY(-5px); }
+            20% { opacity: 0.6; }
+            100% { opacity: 0; transform: translateY(5px); }
+        }
+        
+        #info {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(150, 200, 255, 0.2);
+            font-size: 9px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+        
+        #frequency {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            color: rgba(255, 180, 220, 0.25);
+            font-size: 10px;
+            letter-spacing: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .corner-accent {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            border: 1px solid rgba(100, 180, 255, 0.1);
+            pointer-events: none;
+        }
+        
+        .corner-accent.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .corner-accent.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+        .corner-accent.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+        .corner-accent.br { bottom: 0; right: 0; border-left: none; border-top: none; }
+    </style>
+</head>
+<body>
+    <div class="corner-accent tl"></div>
+    <div class="corner-accent tr"></div>
+    <div class="corner-accent bl"></div>
+    <div class="corner-accent br"></div>
+    
+    <div id="controls">
+        <h3>Signal Parameters</h3>
+        <label>
+            Flow Rate
+            <input type="range" id="speed" min="0" max="2" step="0.05" value="0.5">
+            <span id="speedValue">0.50</span>
+        </label>
+        <label>
+            Dimension
+            <input type="range" id="distance" min="2" max="8" step="0.1" value="4">
+            <span id="distanceValue">4.0</span>
+        </label>
+        <label>
+            Complexity
+            <input type="range" id="level" min="0" max="2" step="1" value="1">
+            <span id="levelValue">1</span>
+        </label>
+        <label>
+            Clarity
+            <input type="range" id="glow" min="0.2" max="1.5" step="0.05" value="0.7">
+            <span id="glowValue">0.70</span>
+        </label>
+        <label>
+            Data Points
+            <input type="range" id="trackers" min="4" max="32" step="1" value="16">
+            <span id="trackersValue">16</span>
+        </label>
+        <label>
+            Stream Density
+            <input type="range" id="streams" min="0" max="500" step="10" value="200">
+            <span id="streamsValue">200</span>
+        </label>
+    </div>
+    
+    <div id="status">
+        <div id="status-title">Receiving</div>
+        <div id="signal-strength"></div>
+        <div id="data-stream"></div>
+    </div>
+    
+    <div id="info">◇ Cosmic Information Download ◇</div>
+    <div id="frequency">432.00 Hz</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+        // ═══════════════════════════════════════════════════════════════
+        // COSMIC COLOR PALETTE - Harmonious, seductive, crystalline
+        // ═══════════════════════════════════════════════════════════════
+        
+        const PALETTE = {
+            // Core structure - ethereal ice
+            structure: {
+                primary: new THREE.Color(0x4a7c9b),
+                secondary: new THREE.Color(0x6a9cbb),
+                glow: new THREE.Color(0x88ccff),
+            },
+            // Data points - harmonious spectrum
+            data: [
+                new THREE.Color(0x78d4ff),  // Celestial cyan
+                new THREE.Color(0xff9ed8),  // Cosmic pink
+                new THREE.Color(0x9effce),  // Ethereal mint
+                new THREE.Color(0xffd89e),  // Golden light
+                new THREE.Color(0xce9eff),  // Violet dream
+                new THREE.Color(0x9ed8ff),  // Ice blue
+                new THREE.Color(0xffce9e),  // Warm amber
+                new THREE.Color(0xd89eff),  // Magenta mist
+            ],
+            // Stream colors
+            streams: [
+                new THREE.Color(0x4488ff),
+                new THREE.Color(0xff4488),
+                new THREE.Color(0x44ff88),
+                new THREE.Color(0xffaa44),
+            ],
+            bg: new THREE.Color(0x000308),
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // DATA STREAM UI
+        // ═══════════════════════════════════════════════════════════════
+        
+        const dataStreamEl = document.getElementById('data-stream');
+        const signalStrengthEl = document.getElementById('signal-strength');
+        
+        // Create signal bars
+        for (let i = 0; i < 8; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'signal-bar';
+            bar.style.height = `${8 + i * 3}px`;
+            signalStrengthEl.appendChild(bar);
+        }
+        
+        function generateDataLine() {
+            const chars = '⬡◇◈⬢△▽○●◐◑⊕⊗';
+            const hex = '0123456789ABCDEF';
+            let line = '';
+            
+            if (Math.random() > 0.5) {
+                // Hex data
+                for (let i = 0; i < 8; i++) {
+                    line += hex[Math.floor(Math.random() * 16)];
+                }
+            } else {
+                // Symbol data
+                for (let i = 0; i < 6; i++) {
+                    line += chars[Math.floor(Math.random() * chars.length)];
+                }
+            }
+            
+            return line;
+        }
+        
+        function updateDataStream() {
+            const line = document.createElement('div');
+            line.className = 'data-line';
+            line.textContent = generateDataLine();
+            dataStreamEl.insertBefore(line, dataStreamEl.firstChild);
+            
+            if (dataStreamEl.children.length > 5) {
+                dataStreamEl.removeChild(dataStreamEl.lastChild);
+            }
+            
+            // Update signal bars
+            const bars = signalStrengthEl.children;
+            for (let i = 0; i < bars.length; i++) {
+                const intensity = 0.3 + Math.random() * 0.7;
+                bars[i].style.opacity = intensity;
+            }
+        }
+        
+        setInterval(updateDataStream, 400);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SCENE SETUP
+        // ═══════════════════════════════════════════════════════════════
+        
+        const scene = new THREE.Scene();
+        scene.background = PALETTE.bg;
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 3000);
+        camera.position.set(0, 60, 280);
+
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+        
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.7, 0.2, 0.9
+        );
+        composer.addPass(bloomPass);
+        
+        // Anamorphic + subtle chromatic shader
+        const cosmicShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                time: { value: 0 },
+                intensity: { value: 0.15 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float time;
+                uniform float intensity;
+                varying vec2 vUv;
+                
+                void main() {
+                    vec2 uv = vUv;
+                    vec2 center = uv - 0.5;
+                    
+                    // Subtle anamorphic horizontal stretch on bright areas
+                    float dist = length(center);
+                    
+                    // Very subtle chromatic aberration
+                    float aberration = 0.001 * intensity;
+                    vec4 r = texture2D(tDiffuse, uv + vec2(aberration, 0.0));
+                    vec4 g = texture2D(tDiffuse, uv);
+                    vec4 b = texture2D(tDiffuse, uv - vec2(aberration, 0.0));
+                    
+                    vec4 color = vec4(r.r, g.g, b.b, 1.0);
+                    
+                    // Subtle vignette
+                    float vignette = 1.0 - dist * 0.5;
+                    color.rgb *= vignette;
+                    
+                    // Subtle color grading - push toward cyan/magenta
+                    color.r *= 0.95;
+                    color.b *= 1.05;
+                    
+                    gl_FragColor = color;
+                }
+            `
+        };
+        
+        const cosmicPass = new ShaderPass(cosmicShader);
+        composer.addPass(cosmicPass);
+        
+        const outputPass = new OutputPass();
+        composer.addPass(outputPass);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.03;
+        controls.target.set(0, 0, 0);
+        controls.maxDistance = 500;
+        controls.minDistance = 80;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.15;
+
+        // ═══════════════════════════════════════════════════════════════
+        // PARAMETERS
+        // ═══════════════════════════════════════════════════════════════
+        
+        let speed = 0.5;
+        let distanceFactor = 4;
+        let fractalLevel = 1;
+        let glowIntensity = 0.7;
+        let trackerCount = 16;
+        let streamCount = 200;
+        
+        const baseScale = 70;
+        
+        // 4D data
+        let vertices4D = [];
+        let edges = [];
+        let projectedPoints = [];
+        let vertexMap;
+        let nextIndex = 0;
+        
+        // Visual elements
+        const nodeMeshes = [];
+        const nodeGroup = new THREE.Group();
+        scene.add(nodeGroup);
+        
+        const trackerMeshes = [];
+        const trackerGroup = new THREE.Group();
+        scene.add(trackerGroup);
+        
+        // Information streams
+        let streamParticles = null;
+        
+        // Sacred geometry rings
+        const sacredRings = [];
+        
+        let edgeLines = null;
+
+        // ═══════════════════════════════════════════════════════════════
+        // INFORMATION STREAMS - Flowing data particles
+        // ═══════════════════════════════════════════════════════════════
+        
+        function createInformationStreams() {
+            if (streamParticles) {
+                scene.remove(streamParticles);
+                streamParticles.geometry.dispose();
+                streamParticles.material.dispose();
+            }
+            
+            const count = streamCount;
+            const geometry = new THREE.BufferGeometry();
+            
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const velocities = new Float32Array(count * 3);
+            const phases = new Float32Array(count);
+            
+            for (let i = 0; i < count; i++) {
+                // Start positions in a cylinder around the structure
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 150 + Math.random() * 100;
+                const height = (Math.random() - 0.5) * 400;
+                
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = height;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+                
+                // Velocity toward center
+                const speed = 0.5 + Math.random() * 1;
+                velocities[i * 3] = -Math.cos(angle) * speed;
+                velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.5;
+                velocities[i * 3 + 2] = -Math.sin(angle) * speed;
+                
+                // Color from palette
+                const colorIndex = i % PALETTE.streams.length;
+                const color = PALETTE.streams[colorIndex];
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+                
+                sizes[i] = 1 + Math.random() * 2;
+                phases[i] = Math.random() * Math.PI * 2;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            // Store velocities and phases for animation
+            geometry.userData = { velocities, phases };
+            
+            const material = new THREE.PointsMaterial({
+                size: 2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
+            });
+            
+            streamParticles = new THREE.Points(geometry, material);
+            scene.add(streamParticles);
+        }
+        
+        function updateStreams(time, delta) {
+            if (!streamParticles) return;
+            
+            const positions = streamParticles.geometry.attributes.position.array;
+            const { velocities, phases } = streamParticles.geometry.userData;
+            const count = positions.length / 3;
+            
+            for (let i = 0; i < count; i++) {
+                const idx = i * 3;
+                
+                // Move toward center with spiral
+                const x = positions[idx];
+                const y = positions[idx + 1];
+                const z = positions[idx + 2];
+                
+                const dist = Math.sqrt(x * x + z * z);
+                const angle = Math.atan2(z, x);
+                
+                // Spiral inward
+                const spiralSpeed = 0.02 * speed;
+                const newAngle = angle + spiralSpeed;
+                const newDist = dist - 0.5 * speed;
+                
+                if (newDist < 20 || Math.abs(y) > 250) {
+                    // Reset to outer edge
+                    const resetAngle = Math.random() * Math.PI * 2;
+                    const resetRadius = 150 + Math.random() * 100;
+                    positions[idx] = Math.cos(resetAngle) * resetRadius;
+                    positions[idx + 1] = (Math.random() - 0.5) * 400;
+                    positions[idx + 2] = Math.sin(resetAngle) * resetRadius;
+                } else {
+                    positions[idx] = Math.cos(newAngle) * newDist;
+                    positions[idx + 1] += velocities[idx + 1] * speed;
+                    positions[idx + 2] = Math.sin(newAngle) * newDist;
+                }
+            }
+            
+            streamParticles.geometry.attributes.position.needsUpdate = true;
+            
+            // Gentle rotation
+            streamParticles.rotation.y += 0.001 * speed;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SACRED GEOMETRY RINGS
+        // ═══════════════════════════════════════════════════════════════
+        
+        function createSacredRings() {
+            // Clear existing
+            sacredRings.forEach(ring => scene.remove(ring));
+            sacredRings.length = 0;
+            
+            // Outer rings - thin, elegant
+            const ringRadii = [140, 160, 185];
+            const ringColors = [
+                new THREE.Color(0x3366aa),
+                new THREE.Color(0xaa3366),
+                new THREE.Color(0x33aa66),
+            ];
+            
+            ringRadii.forEach((radius, i) => {
+                const ringGeo = new THREE.TorusGeometry(radius, 0.3, 16, 128);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: ringColors[i],
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2;
+                ring.userData.baseRadius = radius;
+                ring.userData.rotationSpeed = 0.1 + i * 0.05;
+                sacredRings.push(ring);
+                scene.add(ring);
+            });
+            
+            // Vertical rings
+            for (let i = 0; i < 3; i++) {
+                const ringGeo = new THREE.TorusGeometry(120, 0.2, 16, 128);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color().setHSL(0.55 + i * 0.15, 0.6, 0.5),
+                    transparent: true,
+                    opacity: 0.2
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.y = (i / 3) * Math.PI;
+                ring.userData.rotationAxis = 'y';
+                ring.userData.rotationSpeed = 0.05 + i * 0.02;
+                sacredRings.push(ring);
+                scene.add(ring);
+            }
+        }
+        
+        function updateSacredRings(time) {
+            sacredRings.forEach((ring, i) => {
+                if (ring.userData.rotationAxis === 'y') {
+                    ring.rotation.y += ring.userData.rotationSpeed * 0.01 * speed;
+                    ring.rotation.x = Math.sin(time * 0.2 + i) * 0.1;
+                } else {
+                    ring.rotation.z += ring.userData.rotationSpeed * 0.01 * speed;
+                    // Gentle breathing
+                    const breathe = 1 + Math.sin(time * 0.5 + i * 0.5) * 0.02;
+                    ring.scale.setScalar(breathe);
+                }
+                
+                // Pulse opacity
+                ring.material.opacity = 0.15 + Math.sin(time * 0.8 + i * 0.3) * 0.1;
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TESSERACT GENERATION
+        // ═══════════════════════════════════════════════════════════════
+        
+        function addVertex(v) {
+            const key = [v.x, v.y, v.z, v.w].map(c => c.toFixed(8)).join(',');
+            if (!vertexMap.has(key)) {
+                vertexMap.set(key, nextIndex);
+                vertices4D[nextIndex] = v.clone();
+                nextIndex++;
+            }
+            return vertexMap.get(key);
+        }
+        
+        function generateFractalTesseract(level, offset, currScale) {
+            if (level === 0) {
+                const localIndices = [];
+                for (let i = 0; i < 16; i++) {
+                    const sx = ((i >> 0) & 1) ? 1 : -1;
+                    const sy = ((i >> 1) & 1) ? 1 : -1;
+                    const sz = ((i >> 2) & 1) ? 1 : -1;
+                    const sw = ((i >> 3) & 1) ? 1 : -1;
+                    const v = new THREE.Vector4(
+                        sx * currScale + offset.x,
+                        sy * currScale + offset.y,
+                        sz * currScale + offset.z,
+                        sw * currScale + offset.w
+                    );
+                    localIndices.push(addVertex(v));
+                }
+                for (let i = 0; i < 16; i++) {
+                    for (let dim = 0; dim < 4; dim++) {
+                        const j = i ^ (1 << dim);
+                        if (j > i) {
+                            edges.push([localIndices[i], localIndices[j]]);
+                        }
+                    }
+                }
+                return;
+            }
+            
+            const subScale = currScale / 3;
+            const subStep = 2 * subScale;
+            
+            for (let a = -1; a <= 1; a++) {
+                for (let b = -1; b <= 1; b++) {
+                    for (let c = -1; c <= 1; c++) {
+                        for (let d = -1; d <= 1; d++) {
+                            const middles = (a === 0 ? 1 : 0) + (b === 0 ? 1 : 0) + 
+                                          (c === 0 ? 1 : 0) + (d === 0 ? 1 : 0);
+                            if (middles >= 2) continue;
+                            
+                            const subOffset = new THREE.Vector4(
+                                offset.x + a * subStep,
+                                offset.y + b * subStep,
+                                offset.z + c * subStep,
+                                offset.w + d * subStep
+                            );
+                            generateFractalTesseract(level - 1, subOffset, subScale);
+                        }
+                    }
+                }
+            }
+        }
+        
+        function rebuildTesseract() {
+            vertexMap = new Map();
+            nextIndex = 0;
+            vertices4D = [];
+            edges = [];
+            
+            generateFractalTesseract(fractalLevel, new THREE.Vector4(0, 0, 0, 0), baseScale);
+            
+            projectedPoints = vertices4D.map(() => new THREE.Vector3());
+            
+            // Clear old meshes
+            nodeMeshes.forEach(mesh => nodeGroup.remove(mesh));
+            nodeMeshes.length = 0;
+            
+            // Remove old edge lines
+            if (edgeLines) {
+                scene.remove(edgeLines);
+                edgeLines.geometry.dispose();
+                edgeLines.material.dispose();
+            }
+            
+            // Create glowing edge lines
+            const edgePositions = new Float32Array(edges.length * 6);
+            const edgeColors = new Float32Array(edges.length * 6);
+            const edgeGeometry = new THREE.BufferGeometry();
+            edgeGeometry.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
+            edgeGeometry.setAttribute('color', new THREE.BufferAttribute(edgeColors, 3));
+            
+            const edgeMaterial = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+            
+            edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+            scene.add(edgeLines);
+            
+            // Create node meshes - crystalline diamonds
+            const nodeGeom = new THREE.OctahedronGeometry(1, 0);
+            
+            for (let i = 0; i < vertices4D.length; i++) {
+                const hue = (i / vertices4D.length) * 0.3 + 0.5; // Cyan to magenta range
+                const color = new THREE.Color().setHSL(hue, 0.7, 0.6);
+                
+                const nodeMat = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const node = new THREE.Mesh(nodeGeom, nodeMat);
+                node.userData.vertexIndex = i;
+                node.userData.baseHue = hue;
+                nodeMeshes.push(node);
+                nodeGroup.add(node);
+            }
+            
+            rebuildTrackers();
+        }
+        
+        function rebuildTrackers() {
+            trackerMeshes.forEach(mesh => trackerGroup.remove(mesh));
+            trackerMeshes.length = 0;
+            
+            if (edges.length === 0 || trackerCount === 0) return;
+            
+            // Use icosahedron for trackers - more faceted, crystalline
+            const trackerGeom = new THREE.IcosahedronGeometry(1, 0);
+            
+            for (let i = 0; i < trackerCount; i++) {
+                const colorIndex = i % PALETTE.data.length;
+                const color = PALETTE.data[colorIndex];
+                
+                const trackerMat = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                
+                const tracker = new THREE.Mesh(trackerGeom, trackerMat);
+                
+                tracker.userData = {
+                    edgeIndex: Math.floor(Math.random() * edges.length),
+                    progress: Math.random(),
+                    speed: 0.1 + Math.random() * 0.15,
+                    direction: Math.random() > 0.5 ? 1 : -1,
+                    colorIndex: colorIndex,
+                    baseScale: 2 + Math.random() * 1.5,
+                    pulsePhase: Math.random() * Math.PI * 2
+                };
+                
+                trackerMeshes.push(tracker);
+                trackerGroup.add(tracker);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 4D ROTATIONS
+        // ═══════════════════════════════════════════════════════════════
+        
+        function rotateXW(v, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return new THREE.Vector4(c * v.x + s * v.w, v.y, v.z, -s * v.x + c * v.w);
+        }
+        
+        function rotateYW(v, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return new THREE.Vector4(v.x, c * v.y + s * v.w, v.z, -s * v.y + c * v.w);
+        }
+        
+        function rotateZW(v, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return new THREE.Vector4(v.x, v.y, c * v.z + s * v.w, -s * v.z + c * v.w);
+        }
+        
+        function rotateXY(v, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            return new THREE.Vector4(c * v.x - s * v.y, s * v.x + c * v.y, v.z, v.w);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // LIGHTING - Soft, atmospheric
+        // ═══════════════════════════════════════════════════════════════
+        
+        const ambientLight = new THREE.AmbientLight(0x223344, 0.4);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0x88aaff, 0.3);
+        keyLight.position.set(100, 100, 100);
+        scene.add(keyLight);
+        
+        const fillLight = new THREE.DirectionalLight(0xff88aa, 0.2);
+        fillLight.position.set(-100, -50, -100);
+        scene.add(fillLight);
+        
+        // Central glow
+        const centerLight = new THREE.PointLight(0x66aaff, 1, 200);
+        centerLight.position.set(0, 0, 0);
+        scene.add(centerLight);
+
+        // ═══════════════════════════════════════════════════════════════
+        // PROJECTION & ANIMATION
+        // ═══════════════════════════════════════════════════════════════
+        
+        function updateProjection(time, delta) {
+            const dist = distanceFactor * baseScale;
+            
+            // Smooth, hypnotic rotations
+            const t = time * speed;
+            const angleXW = t * 0.15 + Math.sin(t * 0.1) * 0.2;
+            const angleYW = t * 0.2 + Math.cos(t * 0.08) * 0.15;
+            const angleZW = t * 0.12;
+            const angleXY = t * 0.08;
+            
+            for (let i = 0; i < vertices4D.length; i++) {
+                let v = vertices4D[i].clone();
+                
+                v = rotateXW(v, angleXW);
+                v = rotateYW(v, angleYW);
+                v = rotateZW(v, angleZW);
+                v = rotateXY(v, angleXY);
+                
+                const w = dist / (dist - v.w);
+                projectedPoints[i].set(v.x * w, v.y * w, v.z * w);
+                
+                if (nodeMeshes[i]) {
+                    const mesh = nodeMeshes[i];
+                    mesh.position.copy(projectedPoints[i]);
+                    
+                    const depthScale = Math.max(0.5, Math.min(1.8, w));
+                    mesh.scale.setScalar(1.5 * depthScale);
+                    
+                    mesh.rotation.y = t * 0.5;
+                    mesh.rotation.x = t * 0.3;
+                    
+                    // Color shift based on depth
+                    const hueShift = (v.w / baseScale) * 0.1;
+                    const newHue = (mesh.userData.baseHue + hueShift + t * 0.02) % 1;
+                    mesh.material.color.setHSL(newHue, 0.7, 0.55 + depthScale * 0.1);
+                    mesh.material.opacity = 0.6 + depthScale * 0.3;
+                }
+            }
+            
+            // Update edge colors and positions
+            if (edgeLines) {
+                const positions = edgeLines.geometry.attributes.position.array;
+                const colors = edgeLines.geometry.attributes.color.array;
+                
+                for (let e = 0; e < edges.length; e++) {
+                    const [i1, i2] = edges[e];
+                    const idx = e * 6;
+                    const p1 = projectedPoints[i1];
+                    const p2 = projectedPoints[i2];
+                    
+                    positions[idx] = p1.x;
+                    positions[idx + 1] = p1.y;
+                    positions[idx + 2] = p1.z;
+                    positions[idx + 3] = p2.x;
+                    positions[idx + 4] = p2.y;
+                    positions[idx + 5] = p2.z;
+                    
+                    // Gradient colors along edges
+                    const hue1 = (e / edges.length + t * 0.05) % 1;
+                    const hue2 = (e / edges.length + 0.1 + t * 0.05) % 1;
+                    const c1 = new THREE.Color().setHSL(hue1, 0.6, 0.5);
+                    const c2 = new THREE.Color().setHSL(hue2, 0.6, 0.5);
+                    
+                    colors[idx] = c1.r;
+                    colors[idx + 1] = c1.g;
+                    colors[idx + 2] = c1.b;
+                    colors[idx + 3] = c2.r;
+                    colors[idx + 4] = c2.g;
+                    colors[idx + 5] = c2.b;
+                }
+                
+                edgeLines.geometry.attributes.position.needsUpdate = true;
+                edgeLines.geometry.attributes.color.needsUpdate = true;
+            }
+            
+            // Update trackers
+            trackerMeshes.forEach((tracker, i) => {
+                const data = tracker.userData;
+                
+                data.progress += data.speed * delta * speed * data.direction;
+                
+                if (data.progress >= 1 || data.progress <= 0) {
+                    data.progress = Math.max(0, Math.min(1, data.progress));
+                    
+                    const currentEdge = edges[data.edgeIndex];
+                    const currentVertex = data.direction > 0 ? currentEdge[1] : currentEdge[0];
+                    
+                    const connectedEdges = edges.map((e, idx) => ({ edge: e, idx }))
+                        .filter(({ edge, idx }) => 
+                            idx !== data.edgeIndex && 
+                            (edge[0] === currentVertex || edge[1] === currentVertex)
+                        );
+                    
+                    if (connectedEdges.length > 0) {
+                        const next = connectedEdges[Math.floor(Math.random() * connectedEdges.length)];
+                        data.edgeIndex = next.idx;
+                        
+                        if (next.edge[0] === currentVertex) {
+                            data.direction = 1;
+                            data.progress = 0;
+                        } else {
+                            data.direction = -1;
+                            data.progress = 1;
+                        }
+                    } else {
+                        data.direction *= -1;
+                    }
+                }
+                
+                if (edges[data.edgeIndex]) {
+                    const edge = edges[data.edgeIndex];
+                    const p1 = projectedPoints[edge[0]];
+                    const p2 = projectedPoints[edge[1]];
+                    
+                    if (p1 && p2) {
+                        tracker.position.lerpVectors(p1, p2, data.progress);
+                        
+                        // Elegant pulse
+                        const pulse = 1 + Math.sin(time * 3 + data.pulsePhase) * 0.2;
+                        tracker.scale.setScalar(data.baseScale * pulse);
+                        
+                        // Gentle rotation
+                        tracker.rotation.x = time * 2 + i;
+                        tracker.rotation.y = time * 1.5 + i * 0.5;
+                    }
+                }
+            });
+            
+            // Update streams
+            updateStreams(time, delta);
+            
+            // Update sacred rings
+            updateSacredRings(time);
+            
+            // Update center light
+            centerLight.intensity = 1 + Math.sin(time * 2) * 0.3;
+            
+            // Update bloom
+            bloomPass.strength = glowIntensity * (0.9 + Math.sin(time * 0.5) * 0.1);
+            
+            // Update shader
+            cosmicPass.uniforms.time.value = time;
+            
+            // Update frequency display
+            const freq = 432 + Math.sin(time * 0.3) * 8;
+            document.getElementById('frequency').textContent = `${freq.toFixed(2)} Hz`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CONTROLS SETUP
+        // ═══════════════════════════════════════════════════════════════
+        
+        document.getElementById('speed').addEventListener('input', (e) => {
+            speed = parseFloat(e.target.value);
+            document.getElementById('speedValue').textContent = speed.toFixed(2);
+        });
+        
+        document.getElementById('distance').addEventListener('input', (e) => {
+            distanceFactor = parseFloat(e.target.value);
+            document.getElementById('distanceValue').textContent = distanceFactor.toFixed(1);
+        });
+        
+        document.getElementById('level').addEventListener('input', (e) => {
+            fractalLevel = parseInt(e.target.value);
+            document.getElementById('levelValue').textContent = fractalLevel;
+            rebuildTesseract();
+        });
+        
+        document.getElementById('glow').addEventListener('input', (e) => {
+            glowIntensity = parseFloat(e.target.value);
+            document.getElementById('glowValue').textContent = glowIntensity.toFixed(2);
+        });
+        
+        document.getElementById('trackers').addEventListener('input', (e) => {
+            trackerCount = parseInt(e.target.value);
+            document.getElementById('trackersValue').textContent = trackerCount;
+            rebuildTrackers();
+        });
+        
+        document.getElementById('streams').addEventListener('input', (e) => {
+            streamCount = parseInt(e.target.value);
+            document.getElementById('streamsValue').textContent = streamCount;
+            createInformationStreams();
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        // INITIALIZATION & ANIMATION LOOP
+        // ═══════════════════════════════════════════════════════════════
+        
+        createSacredRings();
+        createInformationStreams();
+        rebuildTesseract();
+        
+        const clock = new THREE.Clock();
+        let lastTime = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = clock.getElapsedTime();
+            const delta = time - lastTime;
+            lastTime = time;
+            
+            updateProjection(time, Math.min(delta, 0.1));
+            
+            controls.update();
+            composer.render();
+        }
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        animate();
+    </script>
+</body>
+</html>
