@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Tornado Simulator with Destruction</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; }
+        canvas { display: block; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; z-index: 100; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <p>Three.js Tornado Simulator (Slower Wind Pull for Drama)</p>
+        <p>Use mouse to orbit camera. Watch the tornado slowly approach and dramatically pull debris!</p>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(50, 50, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // House 1 creation
+        const houseGroup1 = new THREE.Group();
+        houseGroup1.position.set(0, 0, 0);
+        scene.add(houseGroup1);
+
+        // House 1 walls
+        const wallGeometry = new THREE.BoxGeometry(10, 8, 10);
+        const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const walls1 = new THREE.Mesh(wallGeometry, wallMaterial);
+        walls1.position.y = 4;
+        walls1.castShadow = true;
+        walls1.receiveShadow = true;
+        houseGroup1.add(walls1);
+
+        // House 1 roof
+        const roofGeometry = new THREE.ConeGeometry(7, 4, 4);
+        const roofMaterial = new THREE.MeshLambertMaterial({ color: 0xDC143C });
+        const roof1 = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof1.position.y = 10;
+        roof1.rotation.y = Math.PI / 4;
+        roof1.castShadow = true;
+        houseGroup1.add(roof1);
+
+        // House 1 door/window (simple)
+        const doorGeometry = new THREE.BoxGeometry(1, 2, 0.1);
+        const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+        const door1 = new THREE.Mesh(doorGeometry, doorMaterial);
+        door1.position.set(0, 1, 5.05);
+        houseGroup1.add(door1);
+
+        // House 2 creation (added prop)
+        const houseGroup2 = new THREE.Group();
+        houseGroup2.position.set(25, 0, 0);
+        scene.add(houseGroup2);
+
+        // House 2 walls
+        const walls2 = new THREE.Mesh(wallGeometry, wallMaterial);
+        walls2.position.y = 4;
+        walls2.castShadow = true;
+        walls2.receiveShadow = true;
+        houseGroup2.add(walls2);
+
+        // House 2 roof
+        const roof2 = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof2.position.y = 10;
+        roof2.rotation.y = Math.PI / 4;
+        roof2.castShadow = true;
+        houseGroup2.add(roof2);
+
+        // House 2 door
+        const door2 = new THREE.Mesh(doorGeometry, doorMaterial);
+        door2.position.set(0, 1, 5.05);
+        houseGroup2.add(door2);
+
+        // Car creation (added prop)
+        const carGroup = new THREE.Group();
+        carGroup.position.set(10, 0, 0);
+        scene.add(carGroup);
+
+        // Car body
+        const carBodyGeometry = new THREE.BoxGeometry(4, 1.5, 2);
+        const carBodyMaterial = new THREE.MeshLambertMaterial({ color: 0xFF0000 });
+        const carBody = new THREE.Mesh(carBodyGeometry, carBodyMaterial);
+        carBody.position.y = 0.75;
+        carBody.castShadow = true;
+        carGroup.add(carBody);
+
+        // Car wheels (simple cylinders)
+        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3);
+        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
+        const wheels = [];
+        const wheelPositions = [
+            { x: -1.5, z: 1, rot: Math.PI / 2 },
+            { x: 1.5, z: 1, rot: Math.PI / 2 },
+            { x: -1.5, z: -1, rot: Math.PI / 2 },
+            { x: 1.5, z: -1, rot: Math.PI / 2 }
+        ];
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.position.set(pos.x, 0.4, pos.z);
+            wheel.rotation.z = pos.rot;
+            wheel.castShadow = true;
+            carGroup.add(wheel);
+            wheels.push(wheel);
+        });
+
+        // Infrastructure: Simple tree and power pole
+        const treeGroup = new THREE.Group();
+        scene.add(treeGroup);
+        const treeTrunkGeometry = new THREE.CylinderGeometry(0.5, 0.5, 10);
+        const treeTrunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const trunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+        trunk.position.set(15, 5, 0);
+        trunk.castShadow = true;
+        treeGroup.add(trunk);
+        const treeLeavesGeometry = new THREE.SphereGeometry(5);
+        const treeLeavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const leaves = new THREE.Mesh(treeLeavesGeometry, treeLeavesMaterial);
+        leaves.position.set(15, 12, 0);
+        leaves.castShadow = true;
+        treeGroup.add(leaves);
+
+        const poleGeometry = new THREE.CylinderGeometry(0.2, 0.2, 15);
+        const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
+        const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+        pole.position.set(-15, 7.5, 0);
+        pole.castShadow = true;
+        scene.add(pole);
+
+        // Tornado creation using particle system (reduced count for performance)
+        const particleCount = 1000;
+        const tornadoParticles = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const velocities = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+        const sizes = new Float32Array(particleCount);
+
+        for (let i = 0; i < particleCount; i++) {
+            const theta = (i / particleCount) * Math.PI * 4;
+            const height = (Math.random() - 0.5) * 30 + 15;
+            const radius = Math.abs(height / 30) * 5;
+            positions[i * 3] = Math.cos(theta) * radius;
+            positions[i * 3 + 1] = height;
+            positions[i * 3 + 2] = Math.sin(theta) * radius;
+
+            velocities[i * 3] = (Math.random() - 0.5) * 0.02;
+            velocities[i * 3 + 1] = 0.01 + Math.random() * 0.02;
+            velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
+
+            colors[i * 3] = 0.5 + Math.random() * 0.5;
+            colors[i * 3 + 1] = 0.5 + Math.random() * 0.5;
+            colors[i * 3 + 2] = 0.6 + Math.random() * 0.4;
+
+            sizes[i] = Math.random() * 2 + 1;
+        }
+
+        tornadoParticles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        tornadoParticles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        tornadoParticles.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        const tornadoMaterial = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+
+        const tornado = new THREE.Points(tornadoParticles, tornadoMaterial);
+        tornado.position.set(-50, 0, 0);
+        scene.add(tornado);
+
+        // Destruction pieces
+        const debris = [];
+        const createDebris = (geometry, material, position, scale = 1) => {
+            const piece = new THREE.Mesh(geometry, material.clone());
+            piece.position.copy(position);
+            piece.scale.setScalar(scale);
+            piece.castShadow = true;
+            scene.add(piece);
+            debris.push({
+                mesh: piece,
+                velocity: new THREE.Vector3(),
+                angularVelocity: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.03) // Slower rotation
+            });
+            return piece;
+        };
+
+        // Track destructible objects
+        const destructibles = [
+            { group: houseGroup1, walls: walls1, roof: roof1, door: door1, type: 'house', pos: new THREE.Vector3(0, 0, 0) },
+            { group: houseGroup2, walls: walls2, roof: roof2, door: door2, type: 'house', pos: new THREE.Vector3(25, 0, 0) },
+            { group: carGroup, body: carBody, wheels, type: 'car', pos: new THREE.Vector3(10, 0, 0) },
+            { group: treeGroup, trunk, leaves, type: 'tree', pos: new THREE.Vector3(15, 0, 0) },
+            { mesh: pole, type: 'pole', pos: new THREE.Vector3(-15, 0, 0) }
+        ];
+
+        const destroyed = new Set();
+
+        // Animation variables
+        let time = 0;
+        const tornadoSpeed = 0.05;
+
+        // Animate function (using arrow for setAnimationLoop)
+        const animate = () => {
+            controls.update();
+            time += 0.005;
+
+            // Animate tornado particles
+            const positions = tornado.geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const theta = time * 0.5 + positions[i3 + 2] * 0.1;
+                const radius = Math.abs(positions[i3 + 1] / 30) * 5;
+                positions[i3] += Math.cos(theta) * 0.02;
+                positions[i3 + 2] += Math.sin(theta) * 0.02;
+                positions[i3 + 1] += velocities[i3 + 1];
+                if (positions[i3 + 1] > 30 || positions[i3 + 1] < 0) {
+                    positions[i3 + 1] = 0;
+                    velocities[i3 + 1] = 0.01 + Math.random() * 0.02;
+                }
+            }
+            tornado.geometry.attributes.position.needsUpdate = true;
+
+            // Move tornado
+            tornado.position.x += tornadoSpeed;
+
+            // Check for destruction on each prop
+            destructibles.forEach(d => {
+                if (!destroyed.has(d) && tornado.position.distanceTo(d.pos) < 20) {
+                    destroyProp(d);
+                    destroyed.add(d);
+                }
+            });
+
+            // Animate debris (slower pull and gravity for drama)
+            for (let i = debris.length - 1; i >= 0; i--) {
+                const piece = debris[i];
+                // Slower gravity
+                piece.velocity.y -= 0.002;
+                // Slower pull towards tornado
+                const directionToTornado = new THREE.Vector3()
+                    .subVectors(tornado.position, piece.mesh.position)
+                    .normalize()
+                    .multiplyScalar(0.02); // Reduced from 0.05
+                piece.velocity.add(directionToTornado);
+                // Add some damping to velocity for more controlled, dramatic motion
+                piece.velocity.multiplyScalar(0.995);
+                piece.mesh.position.add(piece.velocity);
+                // Slower rotation
+                piece.mesh.rotation.x += piece.angularVelocity.x * 0.8;
+                piece.mesh.rotation.y += piece.angularVelocity.y * 0.8;
+                piece.mesh.rotation.z += piece.angularVelocity.z * 0.8;
+                if (piece.mesh.position.y < -10 || piece.mesh.position.distanceTo(tornado.position) > 100) {
+                    scene.remove(piece.mesh);
+                    debris.splice(i, 1);
+                }
+            }
+
+            // Wind effect (unchanged, already slow)
+            if (tornado.position.x > -30) {
+                treeGroup.rotation.z = Math.sin(time * 0.5) * 0.1;
+                pole.rotation.z = Math.sin(time * 0.5) * 0.05;
+                carGroup.rotation.z = Math.sin(time * 0.5) * 0.05;
+                houseGroup1.rotation.z = Math.sin(time * 0.5) * 0.02;
+                houseGroup2.rotation.z = Math.sin(time * 0.5) * 0.02;
+            }
+
+            // Rotate wheels (only if not destroyed)
+            if (wheels.length > 0 && carGroup.children.length > 0) {
+                wheels.forEach(wheel => {
+                    wheel.rotation.x += 0.01;
+                });
+            }
+
+            renderer.render(scene, camera);
+        };
+
+        // Destroy a specific prop
+        function destroyProp(d) {
+            if (d.type === 'house') {
+                d.walls.visible = false;
+                d.roof.visible = false;
+                d.door.visible = false;
+
+                const housePos = d.group.position;
+                createDebris(new THREE.BoxGeometry(5, 8, 10), wallMaterial, new THREE.Vector3(-2.5, 4, 0).add(housePos), 1);
+                createDebris(new THREE.BoxGeometry(5, 8, 10), wallMaterial, new THREE.Vector3(2.5, 4, 0).add(housePos), 1);
+                createDebris(new THREE.BoxGeometry(10, 4, 10), wallMaterial, new THREE.Vector3(0, 2, 0).add(housePos), 0.5);
+                createDebris(new THREE.BoxGeometry(10, 4, 10), wallMaterial, new THREE.Vector3(0, 6, 0).add(housePos), 0.5);
+
+                createDebris(new THREE.ConeGeometry(3.5, 2, 4), roofMaterial, new THREE.Vector3(-3.5, 10, 0).add(housePos), 1);
+                createDebris(new THREE.ConeGeometry(3.5, 2, 4), roofMaterial, new THREE.Vector3(3.5, 10, 0).add(housePos), 1);
+
+                createDebris(doorGeometry, doorMaterial, d.door.position.clone().add(housePos), 1);
+            } else if (d.type === 'car') {
+                d.wheels.forEach(wheel => {
+                    carGroup.remove(wheel); // Remove from group instead of scene
+                    createDebris(wheelGeometry, wheelMaterial, wheel.position.clone().add(d.pos), 1);
+                });
+                carGroup.remove(d.body);
+                createDebris(carBodyGeometry, carBodyMaterial, d.body.position.clone().add(d.pos), 1);
+            } else if (d.type === 'tree') {
+                treeGroup.remove(d.leaves);
+                createDebris(treeLeavesGeometry, treeLeavesMaterial, d.leaves.position.clone(), 1);
+                d.trunk.rotation.z = Math.PI / 2;
+                createDebris(treeTrunkGeometry, treeTrunkMaterial, d.trunk.position.clone(), 0.8);
+                treeGroup.remove(d.trunk);
+            } else if (d.type === 'pole') {
+                for (let i = 0; i < 3; i++) {
+                    const pieceGeom = new THREE.CylinderGeometry(0.2, 0.2, 5);
+                    const piecePos = new THREE.Vector3(d.pos.x, 2.5 + i * 5, d.pos.z);
+                    createDebris(pieceGeom, poleMaterial, piecePos, 1);
+                    // Set initial velocity on the last debris item
+                    if (debris.length > 0) {
+                        debris[debris.length - 1].velocity.set(
+                            (Math.random() - 0.5) * 2,
+                            Math.random() * 1,
+                            (Math.random() - 0.5) * 2
+                        );
+                    }
+                }
+                scene.remove(d.mesh);
+            }
+            // Remove the group/mesh
+            if (d.group) {
+                scene.remove(d.group);
+            } else if (d.mesh) {
+                scene.remove(d.mesh);
+            }
+        }
+
+        // Set up animation loop (fixes console stack flood)
+        renderer.setAnimationLoop(animate);
+
+        // Position camera
+        camera.position.set(0, 20, 40);
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>

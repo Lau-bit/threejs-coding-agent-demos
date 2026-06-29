@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Hypercube</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            overflow: hidden; 
+            background: #0a0612;
+        }
+        canvas { display: block; }
+        #instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(150, 130, 170, 0.5);
+            font-size: 12px;
+            letter-spacing: 1px;
+            pointer-events: none;
+            text-align: center;
+        }
+        #speed-control {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(10, 6, 18, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(150, 130, 170, 0.3);
+            color: rgba(150, 130, 170, 0.9);
+            font-size: 12px;
+            letter-spacing: 1px;
+            z-index: 100;
+        }
+        #speed-control label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        #speed-slider {
+            width: 150px;
+            margin: 0;
+        }
+        #speed-value {
+            font-size: 11px;
+            margin-left: 10px;
+            color: rgba(170, 150, 190, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">Mouse: Orbit • Scroll: Zoom • Right-click: Pan</div>
+    <div id="speed-control">
+        <label>Animation Speed: <span id="speed-value">1.0x</span></label>
+        <input type="range" id="speed-slider" min="0" max="3" step="0.1" value="1">
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ═══════════════════════════════════════════════════════════════
+        // SCENE SETUP
+        // ═══════════════════════════════════════════════════════════════
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0612);
+        scene.fog = new THREE.FogExp2(0x1a1028, 0.003);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 100, 200);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+        controls.maxDistance = 300;
+        controls.minDistance = 10;
+
+        // Fractal rotation state
+        let fractalRotationDirection = 1;
+        let baseFractalRotationSpeed = 0.015;
+        let speedMultiplier = 1.0; // Controlled by slider
+        let timeSinceDirectionChange = 0;
+        let nextDirectionChange = 3 + Math.random() * 4;
+
+        const fractalCubes = []; // Separate array for synchronized fractal cubes
+
+        // Speed slider setup
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+        speedSlider.addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+            speedValue.textContent = `${speedMultiplier.toFixed(1)}x`;
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        // SACRED GEOMETRY: FRACTAL CUBES ONLY
+        // ═══════════════════════════════════════════════════════════════
+        
+        function createFractalMatrix() {
+            const group = new THREE.Group();
+            
+            // Colors for different recursion levels
+            const levelColors = [
+                0x4444aa, 0x6644cc, 0x8844ee, 0xaa44ff
+            ];
+            
+            const levelEmissive = [
+                0x222255, 0x332266, 0x442277, 0x552288
+            ];
+
+            // Recursive Menger sponge with TINY cubes and large gaps
+            function createFractalCube(x, y, z, size, depth, maxDepth) {
+                if (depth > maxDepth) return;
+                
+                const nextSize = size / 3;
+                
+                if (depth === maxDepth) {
+                    // VERY SMALL cubes (about 30% of cell size for big gaps)
+                    const cubeSize = size * 0.3;
+                    const cubeGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                    const cubeMat = new THREE.MeshStandardMaterial({
+                        color: levelColors[depth % levelColors.length],
+                        roughness: 0.25,
+                        metalness: 0.7,
+                        transparent: true,
+                        opacity: 0.9,
+                        emissive: levelEmissive[depth % levelEmissive.length],
+                        emissiveIntensity: 0.4
+                    });
+                    const cube = new THREE.Mesh(cubeGeo, cubeMat);
+                    cube.position.set(x, y, z);
+                    
+                    // Store for synchronized rotation
+                    fractalCubes.push(cube);
+                    
+                    group.add(cube);
+                    return;
+                }
+                
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dz = -1; dz <= 1; dz++) {
+                            const zeros = (dx === 0 ? 1 : 0) + (dy === 0 ? 1 : 0) + (dz === 0 ? 1 : 0);
+                            if (zeros >= 2) continue;
+                            
+                            createFractalCube(
+                                x + dx * nextSize,
+                                y + dy * nextSize,
+                                z + dz * nextSize,
+                                nextSize,
+                                depth + 1,
+                                maxDepth
+                            );
+                        }
+                    }
+                }
+            }
+            
+            // Create 4 fractals in 2x2 arrangement
+            const spacing = 80; // Distance between centers
+            createFractalCube(-spacing / 2, 0, -spacing / 2, 60, 0, 2);
+            createFractalCube(spacing / 2, 0, -spacing / 2, 60, 0, 2);
+            createFractalCube(-spacing / 2, 0, spacing / 2, 60, 0, 2);
+            createFractalCube(spacing / 2, 0, spacing / 2, 60, 0, 2);
+            
+            group.position.set(0, 0, 0);
+            scene.add(group);
+
+            // Lights
+            const fractalLight = new THREE.PointLight(0x6688ff, 4, 140);
+            fractalLight.position.set(0, 0, 0);
+            scene.add(fractalLight);
+            
+            const fractalLight2 = new THREE.PointLight(0xaa66ff, 2.5, 100);
+            fractalLight2.position.set(0, 50, 0);
+            scene.add(fractalLight2);
+            
+            const fractalLight3 = new THREE.PointLight(0x44aaff, 2, 80);
+            fractalLight3.position.set(0, -20, 0);
+            scene.add(fractalLight3);
+        }
+
+        createFractalMatrix();
+
+        // ═══════════════════════════════════════════════════════════════
+        // LIGHTING
+        // ═══════════════════════════════════════════════════════════════
+        
+        const ambientLight = new THREE.AmbientLight(0x221133, 0.25);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0x443366, 0x110511, 0.35);
+        scene.add(hemiLight);
+
+        const moonLight = new THREE.DirectionalLight(0x8888cc, 0.4);
+        moonLight.position.set(50, 100, 50);
+        moonLight.castShadow = true;
+        moonLight.shadow.mapSize.width = 2048;
+        moonLight.shadow.mapSize.height = 2048;
+        moonLight.shadow.camera.near = 10;
+        moonLight.shadow.camera.far = 500;
+        moonLight.shadow.camera.left = -200;
+        moonLight.shadow.camera.right = 200;
+        moonLight.shadow.camera.top = 200;
+        moonLight.shadow.camera.bottom = -200;
+        scene.add(moonLight);
+
+        const underLight = new THREE.DirectionalLight(0xff6633, 0.15);
+        underLight.position.set(0, -80, 0);
+        scene.add(underLight);
+
+        // ═══════════════════════════════════════════════════════════════
+        // ANIMATION
+        // ═══════════════════════════════════════════════════════════════
+        
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            // Update fractal cube rotation direction periodically (speed-multiplied)
+            timeSinceDirectionChange += delta;
+            if (timeSinceDirectionChange >= nextDirectionChange / speedMultiplier) {
+                fractalRotationDirection *= -1;
+                timeSinceDirectionChange = 0;
+                nextDirectionChange = 2 + Math.random() * 5;
+                // Smoothly vary base speed
+                baseFractalRotationSpeed = 0.01 + Math.random() * 0.015;
+            }
+
+            // Animate ALL fractal cubes uniformly (full speedMultiplier)
+            const effectiveSpeed = baseFractalRotationSpeed * speedMultiplier;
+            const rotX = effectiveSpeed * fractalRotationDirection;
+            const rotY = effectiveSpeed * 1.3 * fractalRotationDirection;
+            const rotZ = effectiveSpeed * 0.7 * fractalRotationDirection;
+            
+            fractalCubes.forEach(cube => {
+                cube.rotation.x += rotX;
+                cube.rotation.y += rotY;
+                cube.rotation.z += rotZ;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

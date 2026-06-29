@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal 3D Tesseract Projection</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #0a0612;
+        }
+        canvas { display: block; }
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-size: 14px;
+            z-index: 100;
+            background: rgba(10, 6, 18, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid rgba(136, 170, 255, 0.3);
+        }
+        #controls label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        #speed, #level {
+            width: 150px;
+        }
+        #instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(150, 130, 170, 0.5);
+            font-size: 12px;
+            letter-spacing: 1px;
+            pointer-events: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <label for="speed">Speed: <span id="speedValue">2.0</span>x</label>
+        <input type="range" id="speed" min="0" max="5" step="0.1" value="2">
+        <label for="level">Fractal Level: <span id="levelValue">1</span></label>
+        <input type="range" id="level" min="0" max="3" step="1" value="1">
+    </div>
+    <div id="instructions">Mouse: Orbit • Scroll: Zoom • Right-click: Pan</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0612);
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 0, 300);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+        controls.maxDistance = 500;
+        controls.minDistance = 10;
+        // Tesseract parameters
+        const scale = 100;
+        const distance = 5 * scale;
+        // Fractal sponge
+        let fractalLevel = 1;
+        let vertices4D = [];
+        let edges = [];
+        let projectedPoints = [];
+        let positions;
+        let vertexMap;
+        let nextIndex = 0;
+        function addVertex(v) {
+            const key = [v.x, v.y, v.z, v.w].map(c => c.toFixed(10)).join(',');
+            if (!vertexMap.has(key)) {
+                vertexMap.set(key, nextIndex);
+                vertices4D[nextIndex] = v.clone();
+                nextIndex++;
+            }
+            return vertexMap.get(key);
+        }
+        function generateSponge(level, offset, currScale) {
+            if (level === 0) {
+                const localIndices = [];
+                for (let i = 0; i < 16; i++) {
+                    const sx = ((i >> 0) & 1) ? 1 : -1;
+                    const sy = ((i >> 1) & 1) ? 1 : -1;
+                    const sz = ((i >> 2) & 1) ? 1 : -1;
+                    const sw = ((i >> 3) & 1) ? 1 : -1;
+                    const v = new THREE.Vector4(
+                        sx * currScale + offset.x,
+                        sy * currScale + offset.y,
+                        sz * currScale + offset.z,
+                        sw * currScale + offset.w
+                    );
+                    localIndices.push(addVertex(v));
+                }
+                // Edges via bit flips
+                for (let i = 0; i < 16; i++) {
+                    for (let dim = 0; dim < 4; dim++) {
+                        const j = i ^ (1 << dim);
+                        edges.push([localIndices[i], localIndices[j]]);
+                    }
+                }
+                return;
+            }
+            // Recurse
+            const subScale = currScale / 3;
+            const subStep = 2 * subScale;
+            for (let a = -1; a <= 1; a++) {
+                for (let b = -1; b <= 1; b++) {
+                    for (let c = -1; c <= 1; c++) {
+                        for (let d = -1; d <= 1; d++) {
+                            const middles = (a === 0 ? 1 : 0) + (b === 0 ? 1 : 0) + (c === 0 ? 1 : 0) + (d === 0 ? 1 : 0);
+                            if (middles <= 1) {
+                                const subOffset = offset.clone().add(
+                                    new THREE.Vector4(a * subStep, b * subStep, c * subStep, d * subStep)
+                                );
+                                generateSponge(level - 1, subOffset, subScale);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        function rebuildSponge() {
+            vertexMap = new Map();
+            nextIndex = 0;
+            vertices4D = [];
+            edges = [];
+            const offset = new THREE.Vector4(0, 0, 0, 0);
+            generateSponge(fractalLevel, offset, scale);
+            projectedPoints = new Array(vertices4D.length).fill().map(() => new THREE.Vector3());
+            positions = new Float32Array(edges.length * 6);
+            lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            console.log(`Generated ${vertices4D.length} vertices, ${edges.length} edges for level ${fractalLevel}`);
+        }
+        // Line geometry
+        const lineGeometry = new THREE.BufferGeometry();
+        const lineMaterial = new THREE.LineBasicMaterial({
+            color: 0x88aaff,
+            transparent: true,
+            opacity: 0.8
+        });
+        const tesseractLines = new THREE.LineSegments(lineGeometry, lineMaterial);
+        scene.add(tesseractLines);
+        // 4D rotation matrices
+        function getRotationMatrixXW(angle) {
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            return new THREE.Matrix4().set(
+                c, 0, 0, s,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                -s, 0, 0, c
+            );
+        }
+        function getRotationMatrixYW(angle) {
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            return new THREE.Matrix4().set(
+                1, 0, 0, 0,
+                0, c, 0, s,
+                0, 0, 1, 0,
+                0, -s, 0, c
+            );
+        }
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x6688ff, 1, 500);
+        pointLight.position.set(200, 200, 200);
+        scene.add(pointLight);
+        const clock = new THREE.Clock();
+        // Controls
+        let speed = 2.0;
+        const speedSlider = document.getElementById('speed');
+        const speedValue = document.getElementById('speedValue');
+        speedSlider.addEventListener('input', (e) => {
+            speed = parseFloat(e.target.value);
+            speedValue.textContent = speed.toFixed(1);
+        });
+        const levelSlider = document.getElementById('level');
+        const levelValue = document.getElementById('levelValue');
+        levelSlider.addEventListener('input', (e) => {
+            fractalLevel = parseInt(e.target.value);
+            levelValue.textContent = fractalLevel;
+            rebuildSponge();
+        });
+        // Function to update projection and positions
+        function updateProjection(time) {
+            const rotXW = getRotationMatrixXW(time * 0.05 * speed);
+            const rotYW = getRotationMatrixYW(time * 0.08 * speed);
+            // Project all vertices
+            for (let i = 0; i < vertices4D.length; i++) {
+                const v = vertices4D[i].clone().applyMatrix4(rotXW).applyMatrix4(rotYW);
+                const factor = distance / (distance - v.w);
+                projectedPoints[i].set(v.x * factor, v.y * factor, v.z * factor);
+            }
+            // Update line positions
+            for (let e = 0; e < edges.length; e++) {
+                const [i1, i2] = edges[e];
+                const idx = e * 6;
+                const p1 = projectedPoints[i1];
+                positions[idx + 0] = p1.x;
+                positions[idx + 1] = p1.y;
+                positions[idx + 2] = p1.z;
+                const p2 = projectedPoints[i2];
+                positions[idx + 3] = p2.x;
+                positions[idx + 4] = p2.y;
+                positions[idx + 5] = p2.z;
+            }
+            lineGeometry.attributes.position.needsUpdate = true;
+        }
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            updateProjection(time);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        // Initial build
+        rebuildSponge();
+        renderer.render(scene, camera);
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        animate();
+    </script>
+</body>
+</html>

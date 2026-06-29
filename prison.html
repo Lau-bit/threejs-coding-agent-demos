@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spacious Cozy Hell</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #2a1010; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        
+        scene.background = new THREE.Color(0x2a1010);
+        // **CHANGE 1: Significantly reduced fog density for spaciousness**
+        scene.fog = new THREE.FogExp2(0x3d1e1e, 0.004); 
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000); // Increased far plane
+        // **CHANGE 2: Moved camera further back and up**
+        camera.position.set(0, 12, 90); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.6; 
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+        controls.minDistance = 5;
+        // **CHANGE 3: Increased max distance to allow zooming out further**
+        controls.maxDistance = 250;
+        controls.target.set(0, 5, -20);
+
+        // --- MATERIALS ---
+        
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x332222,
+            roughness: 0.8, 
+            metalness: 0.2,
+            flatShading: true
+        });
+        
+        const wallMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x2b1b1b, 
+            roughness: 0.9,
+            flatShading: true
+        });
+
+        const barMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x331111,
+            roughness: 0.5, 
+            metalness: 0.6 
+        });
+
+        // Material for distant objects (simple, dark, blends with fog)
+        const distantMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x1a0a0a,
+        });
+
+        // --- HELPER FUNCTIONS ---
+        function distortGeometry(geometry, magnitude) {
+            const pos = geometry.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * magnitude);
+                pos.setY(i, pos.getY(i) + (Math.random() - 0.5) * magnitude);
+                pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * magnitude);
+            }
+            geometry.computeVertexNormals();
+        }
+
+        // --- GEOMETRY ---
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(500, 500, 100, 100); // Increased size
+        const pos = groundGeo.attributes.position;
+        for(let i=0; i < pos.count; i++){
+            const x = pos.getX(i);
+            const y = pos.getY(i); 
+            const zHeight = Math.sin(x/15) * Math.cos(y/15) * 3 + (Math.random()*0.5); 
+            pos.setZ(i, zHeight); 
+        }
+        groundGeo.computeVertexNormals();
+        const ground = new THREE.Mesh(groundGeo, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Walls
+        function createWall(xPos) {
+            const wallGeo = new THREE.BoxGeometry(10, 50, 200, 5, 10, 20);
+            distortGeometry(wallGeo, 2.0);
+            const wall = new THREE.Mesh(wallGeo, wallMaterial);
+            wall.position.set(xPos, 15, -50);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+        }
+        createWall(-40); 
+        createWall(40); 
+
+        // Cells
+        const cellGroup = new THREE.Group();
+        for(let i=0; i<5; i++) {
+            const zPos = -10 - (i * 18);
+            
+            // Floor
+            const platGeo = new THREE.BoxGeometry(14, 1, 12);
+            const plat = new THREE.Mesh(platGeo, groundMaterial);
+            plat.position.set(-25, 0.5, zPos);
+            cellGroup.add(plat);
+
+            // Bars
+            for(let b=0; b<6; b++) {
+                const barGeo = new THREE.CylinderGeometry(0.15, 0.15, 18);
+                const bar = new THREE.Mesh(barGeo, barMaterial);
+                bar.position.set(-19, 9, zPos - 5 + (b*2));
+                cellGroup.add(bar);
+            }
+            const crossBarGeo = new THREE.BoxGeometry(1, 1, 12);
+            const crossBar = new THREE.Mesh(crossBarGeo, barMaterial);
+            crossBar.position.set(-19, 18, zPos);
+            cellGroup.add(crossBar);
+        }
+        const rightCells = cellGroup.clone();
+        rightCells.scale.x = -1;
+        scene.add(cellGroup);
+        scene.add(rightCells);
+
+        // **CHANGE 4: Added massive distant scenery**
+        function createDistantMountain(x, z, height, width) {
+            const mountainGeo = new THREE.ConeGeometry(width, height, 32);
+            distortGeometry(mountainGeo, width * 0.2); // Make them jagged
+            const mountain = new THREE.Mesh(mountainGeo, distantMaterial);
+            mountain.position.set(x, height / 2 - 50, z); // Sunk into ground slightly
+            scene.add(mountain);
+        }
+
+        // Add a few large mountains far away
+        createDistantMountain(-250, -400, 300, 200);
+        createDistantMountain(200, -500, 400, 250);
+        createDistantMountain(0, -600, 350, 300);
+        createDistantMountain(-100, -700, 250, 150);
+
+
+        // --- LIGHTING ---
+
+        const hemiLight = new THREE.HemisphereLight(0xff8866, 0x221111, 0.5);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffaa88, 0.6);
+        dirLight.position.set(20, 50, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const torches = [];
+
+        function createTorch(x, y, z) {
+            const light = new THREE.PointLight(0xffaa44, 2.5, 35); 
+            light.position.set(x, y, z);
+            light.castShadow = true;
+            light.shadow.bias = -0.0001;
+            scene.add(light);
+
+            const bulbGeo = new THREE.SphereGeometry(0.4, 8, 8);
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffcc88 });
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(x, y, z);
+            scene.add(bulb);
+            
+            torches.push({ light: light, mesh: bulb, baseInt: 2.5, speed: Math.random() * 3 + 1 });
+        }
+
+        for(let i=0; i<5; i++) {
+            const zPos = -10 - (i * 18);
+            createTorch(-22, 6, zPos); 
+            createTorch(22, 6, zPos); 
+        }
+
+        // --- PARTICLES ---
+        const particleCount = 600;
+        const particleGeo = new THREE.BufferGeometry();
+        const pPos = [];
+        const pVel = [];
+        const pSizes = [];
+        
+        for(let i=0; i<particleCount; i++) {
+            pPos.push((Math.random() - 0.5) * 150); // Spread out more
+            pPos.push(Math.random() * 50);         
+            pPos.push((Math.random() - 0.5) * 200 - 50); 
+            
+            pVel.push({
+                y: Math.random() * 0.02 + 0.005,
+                x: (Math.random() - 0.5) * 0.02,
+                z: (Math.random() - 0.5) * 0.02
+            });
+            pSizes.push(Math.random());
+        }
+        
+        particleGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+        particleGeo.setAttribute('size', new THREE.Float32BufferAttribute(pSizes, 1));
+
+        const particleMat = new THREE.PointsMaterial({ 
+            color: 0xffcc66, 
+            size: 0.3, 
+            transparent: true, 
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const particleSystem = new THREE.Points(particleGeo, particleMat);
+        scene.add(particleSystem);
+
+        // --- ANIMATION ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            torches.forEach(t => {
+                const flicker = Math.sin(time * t.speed) * 0.2 + Math.cos(time * t.speed * 0.5) * 0.1;
+                t.light.intensity = t.baseInt + flicker;
+                t.mesh.scale.setScalar(1 + flicker * 0.1); 
+            });
+
+            const positions = particleSystem.geometry.attributes.position.array;
+            for(let i=0; i<particleCount; i++) {
+                positions[i*3 + 1] += pVel[i].y;
+                positions[i*3] += Math.sin(time * 0.5 + i) * 0.01;
+                positions[i*3 + 2] += Math.cos(time * 0.3 + i) * 0.01;
+
+                if(positions[i*3 + 1] > 50) {
+                    positions[i*3 + 1] = 0;
+                }
+            }
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
