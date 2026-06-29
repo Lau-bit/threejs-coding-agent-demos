@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Black Hole Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+        }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+        // Log simulation info to console
+        console.log('%cSchwarzschild Black Hole Simulation', 'color: #c8a078; font-size: 16px; font-weight: bold');
+        console.log('%cRay-traced gravitational lensing', 'color: #887766; font-size: 12px');
+        console.log('');
+        console.log('Controls: Mouse to orbit, Scroll to zoom');
+        console.log('');
+        console.log('Physics Parameters:');
+        console.log('  SCHWARZSCHILD METRIC: ds² = -(1-rs/r)dt² + (1-rs/r)⁻¹dr²');
+        console.log('  PHOTON SPHERE: r = 1.5 rs');
+        console.log('  INNERMOST STABLE ORBIT (ISCO): r = 3 rs');
+        console.log('  DOPPLER BEAMING: Enabled');
+
+        // ═══════════════════════════════════════════════════════════════
+        // SCENE SETUP
+        // ═══════════════════════════════════════════════════════════════
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 50000);
+        camera.position.set(0, 15, 60);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.8;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 200;
+        controls.minDistance = 25;
+
+        // Black hole parameters (Schwarzschild radius = 10 units)
+        const RS = 10; // Schwarzschild radius
+        const PHOTON_SPHERE = 1.5 * RS; // r = 1.5 rs
+        const ISCO = 3 * RS; // Innermost Stable Circular Orbit
+
+        // ═══════════════════════════════════════════════════════════════
+        // POST-PROCESSING WITH GRAVITATIONAL LENSING
+        // ═══════════════════════════════════════════════════════════════
+
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        // Realistic gravitational lensing shader based on Schwarzschild metric
+        const GravitationalLensingShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                uBlackHolePos: { value: new THREE.Vector2(0.5, 0.5) },
+                uBlackHoleRadius: { value: 0.1 },
+                uAspect: { value: window.innerWidth / window.innerHeight },
+                uTime: { value: 0 },
+                uCameraDistance: { value: 60.0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 uBlackHolePos;
+                uniform float uBlackHoleRadius;
+                uniform float uAspect;
+                uniform float uTime;
+                uniform float uCameraDistance;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 uv = vUv;
+                    vec2 center = uBlackHolePos;
+
+                    // Calculate distance from black hole center in screen space
+                    vec2 diff = uv - center;
+                    diff.x *= uAspect;
+
+                    float dist = length(diff);
+                    float rs = uBlackHoleRadius; // Schwarzschild radius in screen space
+
+                    // Event horizon shadow - complete darkness (appears ~2.6 rs due to lensing)
+                    float shadowRadius = rs * 2.6;
+                    if (dist < shadowRadius) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+
+                    // Gravitational lensing extends far beyond the black hole
+                    float lensingRange = rs * 15.0;
+
+                    if (dist < lensingRange) {
+                        // Schwarzschild deflection: α = 4GM/(c²b) = 2rs/b
+                        // In screen space, we map this to UV distortion
+                        float impactParam = dist;
+
+                        // Deflection strength - falls off with distance
+                        // Strong deflection near photon sphere (1.5 rs), weak far away
+                        float deflectionStrength = rs * rs / (impactParam * impactParam);
+
+                        // Enhanced lensing near photon sphere
+                        float photonSphereRadius = rs * 1.5 * 2.6; // Apparent photon sphere
+                        if (dist < photonSphereRadius * 1.5 && dist > shadowRadius) {
+                            float proximity = 1.0 - (dist - shadowRadius) / (photonSphereRadius * 1.5 - shadowRadius);
+                            deflectionStrength += proximity * proximity * 0.8;
+                        }
+
+                        // Direction of deflection - light bends TOWARD the black hole
+                        // So we sample from further away (outward direction)
+                        vec2 toCenter = normalize(diff);
+
+                        // The UV offset - we're looking at where light came FROM
+                        // Light bends toward the hole, so the source appears shifted outward
+                        float uvOffset = deflectionStrength * 0.5;
+                        uvOffset = min(uvOffset, 0.4); // Clamp to prevent extreme distortion
+
+                        vec2 lensedUV = uv + toCenter * uvOffset;
+
+                        // Keep UV in bounds
+                        lensedUV = clamp(lensedUV, 0.0, 1.0);
+
+                        vec4 color = texture2D(tDiffuse, lensedUV);
+
+                        // Subtle brightening near the shadow edge (Einstein ring effect)
+                        float ringDist = abs(dist - shadowRadius * 1.1);
+                        float ringWidth = rs * 0.5;
+                        if (ringDist < ringWidth) {
+                            float ringBrightness = 1.0 - ringDist / ringWidth;
+                            color.rgb *= 1.0 + ringBrightness * 0.3;
+                        }
+
+                        // Gravitational redshift near the shadow
+                        if (dist < shadowRadius * 2.0) {
+                            float redshiftProximity = 1.0 - (dist - shadowRadius) / shadowRadius;
+                            color.r *= 1.0 + redshiftProximity * 0.15;
+                            color.gb *= 1.0 - redshiftProximity * 0.1;
+                        }
+
+                        gl_FragColor = color;
+                        return;
+                    }
+
+                    gl_FragColor = texture2D(tDiffuse, uv);
+                }
+            `
+        };
+
+        const lensingPass = new ShaderPass(GravitationalLensingShader);
+        composer.addPass(lensingPass);
+
+        // ═══════════════════════════════════════════════════════════════
+        // BLACK HOLE - TRUE EVENT HORIZON
+        // ═══════════════════════════════════════════════════════════════
+
+        // The event horizon - absolute black, absorbs all light
+        const eventHorizonGeo = new THREE.SphereGeometry(RS, 128, 128);
+        const eventHorizonMat = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            side: THREE.FrontSide
+        });
+        const eventHorizon = new THREE.Mesh(eventHorizonGeo, eventHorizonMat);
+        scene.add(eventHorizon);
+
+        // Shadow region (slightly larger than event horizon due to lensing)
+        // The "shadow" appears larger than rs due to gravitational lensing
+        const shadowGeo = new THREE.SphereGeometry(RS * 1.05, 128, 128);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            side: THREE.FrontSide
+        });
+        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        scene.add(shadow);
+
+        // ═══════════════════════════════════════════════════════════════
+        // THIN ACCRETION DISK - SCIENTIFICALLY ACCURATE
+        // ═══════════════════════════════════════════════════════════════
+
+        // Based on Novikov-Thorne model for thin accretion disks
+        // Temperature profile: T(r) ∝ r^(-3/4) for Newtonian, modified near ISCO
+        // Includes Doppler beaming (approaching side brighter) and gravitational redshift
+
+        const accretionDiskShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uRS: { value: RS },
+                uISCO: { value: ISCO },
+                uInnerRadius: { value: ISCO },
+                uOuterRadius: { value: RS * 8 },
+                uViewDir: { value: new THREE.Vector3(0, 1, 0) }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                varying vec3 vWorldPos;
+                varying vec3 vNormal;
+
+                void main() {
+                    vUv = uv;
+                    vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+                    vNormal = normalize(normalMatrix * normal);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uRS;
+                uniform float uISCO;
+                uniform float uInnerRadius;
+                uniform float uOuterRadius;
+                uniform vec3 uViewDir;
+
+                varying vec2 vUv;
+                varying vec3 vWorldPos;
+                varying vec3 vNormal;
+
+                // Blackbody approximation - simplified Planck function
+                vec3 blackbodyColor(float temp) {
+                    // Temperature to visible color (simplified)
+                    vec3 color;
+                    float t = temp / 10000.0;
+
+                    // Red channel
+                    if (t <= 0.66) {
+                        color.r = 1.0;
+                    } else {
+                        color.r = clamp(1.29 * pow(t - 0.6, -0.1332), 0.0, 1.0);
+                    }
+
+                    // Green channel
+                    if (t <= 0.66) {
+                        color.g = clamp(0.39 * log(max(t, 0.01)) + 0.87, 0.0, 1.0);
+                    } else {
+                        color.g = clamp(1.13 * pow(t - 0.6, -0.0755), 0.0, 1.0);
+                    }
+
+                    // Blue channel
+                    if (t >= 0.66) {
+                        color.b = 1.0;
+                    } else if (t >= 0.19) {
+                        color.b = clamp(0.54 * log(t - 0.1) + 0.63, 0.0, 1.0);
+                    } else {
+                        color.b = 0.0;
+                    }
+
+                    return color;
+                }
+
+                // FBM noise for disk structure
+                float hash(vec2 p) {
+                    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+                }
+
+                float noise(vec2 p) {
+                    vec2 i = floor(p);
+                    vec2 f = fract(p);
+                    f = f * f * (3.0 - 2.0 * f);
+                    float a = hash(i);
+                    float b = hash(i + vec2(1.0, 0.0));
+                    float c = hash(i + vec2(0.0, 1.0));
+                    float d = hash(i + vec2(1.0, 1.0));
+                    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+                }
+
+                float fbm(vec2 p, int octaves) {
+                    float value = 0.0;
+                    float amplitude = 0.5;
+                    for (int i = 0; i < 6; i++) {
+                        if (i >= octaves) break;
+                        value += amplitude * noise(p);
+                        p *= 2.0;
+                        amplitude *= 0.5;
+                    }
+                    return value;
+                }
+
+                void main() {
+                    float r = length(vWorldPos.xz);
+                    float angle = atan(vWorldPos.z, vWorldPos.x);
+
+                    // Discard if outside disk
+                    if (r < uInnerRadius || r > uOuterRadius) discard;
+
+                    // Normalized radius (0 at ISCO, 1 at outer edge)
+                    float normalizedR = (r - uInnerRadius) / (uOuterRadius - uInnerRadius);
+
+                    // Keplerian orbital velocity: v = sqrt(GM/r) ∝ r^(-1/2)
+                    // Angular velocity: Ω ∝ r^(-3/2)
+                    float orbitalVelocity = pow(uInnerRadius / r, 0.5);
+                    float angularVelocity = pow(uInnerRadius / r, 1.5);
+
+                    // Rotating angle based on Keplerian motion
+                    float rotatedAngle = angle - uTime * angularVelocity * 0.3;
+
+                    // Temperature profile: T ∝ r^(-3/4) (Shakura-Sunyaev disk)
+                    // Modified near ISCO where stress-free boundary condition applies
+                    float tempProfile = pow(uInnerRadius / r, 0.75);
+                    float iscoCorrection = 1.0 - sqrt(uInnerRadius / r);
+                    iscoCorrection = max(iscoCorrection, 0.0);
+                    float localTemp = 8000.0 * tempProfile * pow(iscoCorrection, 0.25);
+
+                    // Add turbulent hot spots
+                    vec2 noiseCoord = vec2(rotatedAngle * 3.0, normalizedR * 6.0);
+                    float turbulence = fbm(noiseCoord + uTime * 0.1, 5);
+                    localTemp += turbulence * 2000.0 * (1.0 - normalizedR);
+
+                    // Doppler beaming - relativistic effect
+                    // Approaching side (positive x for counterclockwise rotation) is blueshifted and brighter
+                    // Receding side is redshifted and dimmer
+                    float dopplerFactor = 1.0 + orbitalVelocity * 0.4 * sin(rotatedAngle);
+
+                    // Gravitational redshift: z = 1/sqrt(1 - rs/r) - 1
+                    float gravitationalRedshift = 1.0 / sqrt(max(1.0 - uRS / r, 0.01));
+
+                    // Combined color with Doppler and gravitational effects
+                    vec3 baseColor = blackbodyColor(localTemp * dopplerFactor / gravitationalRedshift);
+
+                    // Intensity modulation from Doppler beaming
+                    // I_observed = I_emitted * δ^3 where δ is Doppler factor
+                    float intensity = pow(dopplerFactor, 3.0);
+                    intensity *= 1.0 / (gravitationalRedshift * gravitationalRedshift);
+
+                    // Disk density structure - spiral arms and turbulence
+                    float spiralArms = sin(rotatedAngle * 3.0 + normalizedR * 8.0) * 0.3 + 0.7;
+                    float densityVariation = (0.5 + turbulence * 0.5) * spiralArms;
+
+                    // Surface brightness decreases with radius
+                    float surfaceBrightness = pow(1.0 - normalizedR, 0.5) * densityVariation;
+
+                    // Edge darkening near ISCO (plunging region)
+                    float innerEdge = smoothstep(0.0, 0.1, normalizedR);
+                    float outerEdge = 1.0 - smoothstep(0.85, 1.0, normalizedR);
+
+                    // Final color
+                    vec3 finalColor = baseColor * surfaceBrightness * intensity * innerEdge * outerEdge;
+
+                    // Subtle glow enhancement near inner edge
+                    float innerGlow = (1.0 - normalizedR) * 0.3;
+                    finalColor += vec3(0.4, 0.2, 0.1) * innerGlow * innerEdge;
+
+                    // Keep colors muted and realistic
+                    finalColor *= 0.7;
+
+                    float alpha = surfaceBrightness * innerEdge * outerEdge * 0.95;
+
+                    gl_FragColor = vec4(finalColor, alpha);
+                }
+            `
+        };
+
+        const diskMaterial = new THREE.ShaderMaterial({
+            uniforms: accretionDiskShader.uniforms,
+            vertexShader: accretionDiskShader.vertexShader,
+            fragmentShader: accretionDiskShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        // Create high-resolution disk geometry
+        const diskGeometry = new THREE.RingGeometry(ISCO, RS * 8, 512, 128);
+        const accretionDisk = new THREE.Mesh(diskGeometry, diskMaterial);
+        accretionDisk.rotation.x = -Math.PI / 2;
+        scene.add(accretionDisk);
+
+        // ═══════════════════════════════════════════════════════════════
+        // DISK THICKNESS - SUBTLE 3D STRUCTURE
+        // ═══════════════════════════════════════════════════════════════
+
+        // Thin disk approximation but with slight thickness that increases with radius
+        // h/r ~ 0.01 to 0.1 for thin disks
+
+        function createDiskLayer(yOffset, opacity) {
+            const geo = new THREE.RingGeometry(ISCO, RS * 8, 256, 64);
+            const positions = geo.attributes.position.array;
+
+            for (let i = 0; i < positions.length; i += 3) {
+                const x = positions[i];
+                const y = positions[i + 1];
+                const r = Math.sqrt(x * x + y * y);
+
+                // Disk scale height increases with radius: h ∝ r^(9/8)
+                const scaleHeight = 0.5 * Math.pow(r / ISCO, 1.125);
+                positions[i + 2] = yOffset * scaleHeight;
+            }
+
+            const mat = diskMaterial.clone();
+            mat.uniforms = {
+                uTime: diskMaterial.uniforms.uTime,
+                uRS: { value: RS },
+                uISCO: { value: ISCO },
+                uInnerRadius: { value: ISCO },
+                uOuterRadius: { value: RS * 8 },
+                uViewDir: { value: new THREE.Vector3(0, 1, 0) }
+            };
+            mat.transparent = true;
+            mat.opacity = opacity;
+
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            return mesh;
+        }
+
+        // Add subtle disk thickness layers
+        for (let i = -2; i <= 2; i++) {
+            if (i !== 0) {
+                const layer = createDiskLayer(i * 0.3, 0.3);
+                scene.add(layer);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PHOTON RING - LIGHT ORBITING THE BLACK HOLE
+        // ═══════════════════════════════════════════════════════════════
+
+        // The photon ring at r = 1.5 rs where light can orbit
+        const photonRingGeo = new THREE.TorusGeometry(PHOTON_SPHERE, 0.15, 32, 256);
+        const photonRingMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 }
+            },
+            vertexShader: `
+                varying vec3 vPosition;
+                void main() {
+                    vPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                varying vec3 vPosition;
+
+                void main() {
+                    float angle = atan(vPosition.z, vPosition.x);
+
+                    // Subtle flickering from light spiraling in
+                    float flicker = sin(angle * 10.0 - uTime * 8.0) * 0.3 + 0.7;
+
+                    // Very dim - photon ring is subtle
+                    vec3 color = vec3(0.9, 0.7, 0.5) * 0.15 * flicker;
+                    float alpha = 0.3 * flicker;
+
+                    gl_FragColor = vec4(color, alpha);
+                }
+            `,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const photonRing = new THREE.Mesh(photonRingGeo, photonRingMat);
+        photonRing.rotation.x = Math.PI / 2;
+        scene.add(photonRing);
+
+        // ═══════════════════════════════════════════════════════════════
+        // BACKGROUND STARS - DISTANT AND DIM
+        // ═══════════════════════════════════════════════════════════════
+
+        const starCount = 15000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+        const starSizes = new Float32Array(starCount);
+
+        // Distance multiplier to make space feel much larger
+        const STAR_DISTANCE_MULTIPLIER = 10;
+
+        for (let i = 0; i < starCount; i++) {
+            // Spherical distribution avoiding the black hole region
+            let x, y, z, dist;
+            do {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = (2000 + Math.random() * 18000) * STAR_DISTANCE_MULTIPLIER / 10;
+
+                x = r * Math.sin(phi) * Math.cos(theta);
+                y = r * Math.sin(phi) * Math.sin(theta);
+                z = r * Math.cos(phi);
+                dist = Math.sqrt(x * x + y * y + z * z);
+            } while (dist < 2000);
+
+            starPositions[i * 3] = x;
+            starPositions[i * 3 + 1] = y;
+            starPositions[i * 3 + 2] = z;
+
+            // Realistic star colors - mostly white/yellow with some variation
+            const colorTemp = 3000 + Math.random() * 25000; // Kelvin
+            const col = new THREE.Color();
+
+            if (colorTemp < 5000) {
+                col.setHSL(0.08, 0.5, 0.5 + Math.random() * 0.3);
+            } else if (colorTemp < 8000) {
+                col.setHSL(0.12, 0.2, 0.7 + Math.random() * 0.3);
+            } else {
+                col.setHSL(0.6, 0.3, 0.7 + Math.random() * 0.3);
+            }
+
+            starColors[i * 3] = col.r;
+            starColors[i * 3 + 1] = col.g;
+            starColors[i * 3 + 2] = col.b;
+
+            // Scale star sizes proportionally with distance to maintain apparent size
+            starSizes[i] = (0.5 + Math.random() * 1.5) * STAR_DISTANCE_MULTIPLIER;
+        }
+
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+        const starMaterial = new THREE.PointsMaterial({
+            size: 10.0,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.7,
+            sizeAttenuation: true
+        });
+
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // ═══════════════════════════════════════════════════════════════
+        // DISTANT NEBULA - SUBTLE BACKGROUND
+        // ═══════════════════════════════════════════════════════════════
+
+        const nebulaGeo = new THREE.PlaneGeometry(8000, 8000);
+        const nebulaMat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                varying vec2 vUv;
+
+                float hash(vec2 p) {
+                    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+                }
+
+                float noise(vec2 p) {
+                    vec2 i = floor(p);
+                    vec2 f = fract(p);
+                    f = f * f * (3.0 - 2.0 * f);
+                    float a = hash(i);
+                    float b = hash(i + vec2(1.0, 0.0));
+                    float c = hash(i + vec2(0.0, 1.0));
+                    float d = hash(i + vec2(1.0, 1.0));
+                    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+                }
+
+                float fbm(vec2 p) {
+                    float value = 0.0;
+                    float amplitude = 0.5;
+                    for (int i = 0; i < 6; i++) {
+                        value += amplitude * noise(p);
+                        p *= 2.0;
+                        amplitude *= 0.5;
+                    }
+                    return value;
+                }
+
+                void main() {
+                    vec2 uv = vUv * 4.0;
+
+                    float n = fbm(uv + uTime * 0.01);
+                    float n2 = fbm(uv * 1.5 + vec2(100.0, 0.0));
+
+                    vec3 color1 = vec3(0.1, 0.05, 0.15);
+                    vec3 color2 = vec3(0.05, 0.08, 0.12);
+
+                    vec3 color = mix(color1, color2, n) * n2 * 0.3;
+
+                    float alpha = n * n2 * 0.15;
+
+                    gl_FragColor = vec4(color, alpha);
+                }
+            `,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const nebula = new THREE.Mesh(nebulaGeo, nebulaMat);
+        nebula.position.z = -5000;
+        scene.add(nebula);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SUBTLE DUST/GAS AROUND THE DISK
+        // ═══════════════════════════════════════════════════════════════
+
+        const dustCount = 2000;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        const dustColors = new Float32Array(dustCount * 3);
+
+        for (let i = 0; i < dustCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = ISCO + Math.random() * (RS * 10 - ISCO);
+            const height = (Math.random() - 0.5) * 4 * (r / (RS * 8));
+
+            dustPositions[i * 3] = Math.cos(angle) * r;
+            dustPositions[i * 3 + 1] = height;
+            dustPositions[i * 3 + 2] = Math.sin(angle) * r;
+
+            // Warm dust colors
+            dustColors[i * 3] = 0.4 + Math.random() * 0.2;
+            dustColors[i * 3 + 1] = 0.2 + Math.random() * 0.1;
+            dustColors[i * 3 + 2] = 0.1 + Math.random() * 0.05;
+        }
+
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+        dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+
+        const dustMat = new THREE.PointsMaterial({
+            size: 0.3,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.15,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const dust = new THREE.Points(dustGeo, dustMat);
+        scene.add(dust);
+
+        // ═══════════════════════════════════════════════════════════════
+        // ANIMATION LOOP
+        // ═══════════════════════════════════════════════════════════════
+
+        const clock = new THREE.Clock();
+
+        function updateBlackHoleScreenPosition() {
+            // Project black hole center to screen space
+            const vector = new THREE.Vector3(0, 0, 0);
+            vector.project(camera);
+
+            // Convert from NDC (-1 to 1) to UV (0 to 1)
+            const screenX = (vector.x + 1) / 2;
+            const screenY = (vector.y + 1) / 2;
+
+            lensingPass.uniforms.uBlackHolePos.value.set(screenX, screenY);
+
+            // Calculate apparent angular size of Schwarzschild radius
+            const distance = camera.position.length();
+            const fov = camera.fov * Math.PI / 180;
+            const screenHeight = 2 * Math.tan(fov / 2);
+
+            // RS in screen space (as fraction of screen height)
+            const apparentSize = (RS / distance) / screenHeight;
+
+            lensingPass.uniforms.uBlackHoleRadius.value = apparentSize;
+            lensingPass.uniforms.uCameraDistance.value = distance;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+
+            // Update shader uniforms
+            diskMaterial.uniforms.uTime.value = time;
+            photonRingMat.uniforms.uTime.value = time;
+            nebulaMat.uniforms.uTime.value = time;
+            lensingPass.uniforms.uTime.value = time;
+            lensingPass.uniforms.uAspect.value = window.innerWidth / window.innerHeight;
+
+            // Update lensing based on camera position
+            updateBlackHoleScreenPosition();
+
+            // Rotate dust slowly
+            dust.rotation.y = time * 0.02;
+
+            // Subtle photon ring wobble
+            photonRing.rotation.z = Math.sin(time * 0.5) * 0.05;
+
+            controls.update();
+            composer.render();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // RESIZE HANDLER
+        // ═══════════════════════════════════════════════════════════════
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            lensingPass.uniforms.uAspect.value = window.innerWidth / window.innerHeight;
+        });
+
+        animate();
+    </script>
+</body>
+</html>

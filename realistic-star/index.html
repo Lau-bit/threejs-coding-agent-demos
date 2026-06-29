@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Star Simulation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+        }
+        canvas { display: block; }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 200, 150, 0.6);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            text-align: center;
+            text-transform: uppercase;
+        }
+        #title {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 220, 180, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 18px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-align: center;
+        }
+        #title span {
+            display: block;
+            font-size: 11px;
+            color: rgba(255, 180, 120, 0.5);
+            margin-top: 5px;
+            letter-spacing: 3px;
+        }
+        #controls {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(20, 10, 0, 0.85);
+            padding: 15px 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 180, 100, 0.2);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            z-index: 100;
+        }
+        #controls label {
+            display: block;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        #controls input[type="range"] {
+            width: 140px;
+            margin: 5px 0 15px 0;
+            accent-color: #ffaa60;
+        }
+        .control-value {
+            font-size: 10px;
+            color: rgba(255, 220, 180, 0.7);
+            margin-left: 8px;
+        }
+        #stats {
+            position: fixed;
+            bottom: 60px;
+            left: 20px;
+            background: rgba(20, 10, 0, 0.7);
+            padding: 12px 16px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 150, 80, 0.15);
+            color: rgba(255, 180, 120, 0.7);
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+        #stats div {
+            margin: 3px 0;
+        }
+        #stats span {
+            color: rgba(255, 220, 180, 0.9);
+        }
+        #star-type {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(20, 10, 0, 0.85);
+            padding: 15px 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 180, 100, 0.2);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            z-index: 100;
+        }
+        #star-type label {
+            display: block;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        #star-type button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: rgba(255, 150, 80, 0.1);
+            border: 1px solid rgba(255, 150, 80, 0.3);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 10px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        #star-type button:hover {
+            background: rgba(255, 150, 80, 0.2);
+            border-color: rgba(255, 180, 100, 0.5);
+        }
+        #star-type button.active {
+            background: rgba(255, 150, 80, 0.3);
+            border-color: rgba(255, 200, 150, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="title">
+        <span id="star-name">Sol</span>
+        <span id="star-class">G2V Main Sequence Star</span>
+    </div>
+    <div id="info">Mouse: Orbit | Scroll: Zoom | Right-click: Pan</div>
+
+    <div id="star-type">
+        <label>Star Classification</label>
+        <button id="btn-red-dwarf">Red Dwarf (M)</button>
+        <button id="btn-sun" class="active">Sun-like (G)</button>
+        <button id="btn-blue-giant">Blue Giant (O/B)</button>
+        <button id="btn-red-giant">Red Giant (K/M)</button>
+        <button id="btn-white-dwarf">White Dwarf</button>
+    </div>
+
+    <div id="controls">
+        <label>Activity Level <span class="control-value" id="activity-val">1.0x</span></label>
+        <input type="range" id="activity-slider" min="0.2" max="3" step="0.1" value="1">
+
+        <label>Glow Intensity <span class="control-value" id="corona-val">1.0x</span></label>
+        <input type="range" id="corona-slider" min="0.2" max="2" step="0.1" value="1">
+
+        <label>Rotation Speed <span class="control-value" id="rotation-val">1.0x</span></label>
+        <input type="range" id="rotation-slider" min="0.1" max="3" step="0.1" value="1">
+
+        <label>Time Scale <span class="control-value" id="time-val">1.0x</span></label>
+        <input type="range" id="time-slider" min="0.1" max="5" step="0.1" value="1">
+    </div>
+
+    <div id="stats">
+        <div>SURFACE TEMP: <span id="stat-temp">5,778 K</span></div>
+        <div>RADIUS: <span id="stat-radius">1.0 R☉</span></div>
+        <div>LUMINOSITY: <span id="stat-luminosity">1.0 L☉</span></div>
+        <div>SPECTRAL TYPE: <span id="stat-spectral">G2V</span></div>
+        <div>CORE TEMP: <span id="stat-core">15.7 × 10⁶ K</span></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ═══════════════════════════════════════════════════════════════
+        // STAR PRESETS - Based on real stellar classifications
+        // ═══════════════════════════════════════════════════════════════
+
+        const starPresets = {
+            'red-dwarf': {
+                name: 'Proxima Centauri',
+                class: 'M5.5Ve Red Dwarf',
+                temperature: 3042,
+                radius: 0.15,
+                luminosity: 0.0017,
+                spectral: 'M5.5Ve',
+                coreTemp: '4 × 10⁶ K',
+                color1: new THREE.Color(0xff3300),
+                color2: new THREE.Color(0xff6644),
+                color3: new THREE.Color(0xffaa88),
+                glowColor: new THREE.Color(0xff4422),
+                granuleScale: 0.3,
+                spotFrequency: 0.8,
+                flareIntensity: 2.5
+            },
+            'sun': {
+                name: 'Sol',
+                class: 'G2V Main Sequence Star',
+                temperature: 5778,
+                radius: 1.0,
+                luminosity: 1.0,
+                spectral: 'G2V',
+                coreTemp: '15.7 × 10⁶ K',
+                color1: new THREE.Color(0xff6600),
+                color2: new THREE.Color(0xffaa33),
+                color3: new THREE.Color(0xffffaa),
+                glowColor: new THREE.Color(0xffcc66),
+                granuleScale: 1.0,
+                spotFrequency: 0.3,
+                flareIntensity: 1.0
+            },
+            'blue-giant': {
+                name: 'Rigel',
+                class: 'B8Ia Blue Supergiant',
+                temperature: 12100,
+                radius: 78.9,
+                luminosity: 120000,
+                spectral: 'B8Ia',
+                coreTemp: '50 × 10⁶ K',
+                color1: new THREE.Color(0x4488ff),
+                color2: new THREE.Color(0x88bbff),
+                color3: new THREE.Color(0xccddff),
+                glowColor: new THREE.Color(0x88aaff),
+                granuleScale: 3.0,
+                spotFrequency: 0.1,
+                flareIntensity: 0.5
+            },
+            'red-giant': {
+                name: 'Betelgeuse',
+                class: 'M1-2Ia Red Supergiant',
+                temperature: 3500,
+                radius: 764,
+                luminosity: 126000,
+                spectral: 'M1-2Ia',
+                coreTemp: '160 × 10⁶ K',
+                color1: new THREE.Color(0xff2200),
+                color2: new THREE.Color(0xff5500),
+                color3: new THREE.Color(0xff8844),
+                glowColor: new THREE.Color(0xff4411),
+                granuleScale: 5.0,
+                spotFrequency: 0.5,
+                flareIntensity: 0.3
+            },
+            'white-dwarf': {
+                name: 'Sirius B',
+                class: 'DA2 White Dwarf',
+                temperature: 25200,
+                radius: 0.0084,
+                luminosity: 0.056,
+                spectral: 'DA2',
+                coreTemp: 'Degenerate Core',
+                color1: new THREE.Color(0xaaccff),
+                color2: new THREE.Color(0xddeeff),
+                color3: new THREE.Color(0xffffff),
+                glowColor: new THREE.Color(0xccddff),
+                granuleScale: 0.1,
+                spotFrequency: 0.0,
+                flareIntensity: 0.1
+            }
+        };
+
+        let currentPreset = starPresets['sun'];
+
+        // ═══════════════════════════════════════════════════════════════
+        // SCENE SETUP
+        // ═══════════════════════════════════════════════════════════════
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+        camera.position.set(0, 20, 50);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 200;
+        controls.minDistance = 20;
+
+        // Parameters
+        let activityLevel = 1.0;
+        let glowIntensity = 1.0;
+        let rotationSpeed = 1.0;
+        let timeScale = 1.0;
+
+        // Control listeners
+        document.getElementById('activity-slider').addEventListener('input', (e) => {
+            activityLevel = parseFloat(e.target.value);
+            document.getElementById('activity-val').textContent = `${activityLevel.toFixed(1)}x`;
+        });
+        document.getElementById('corona-slider').addEventListener('input', (e) => {
+            glowIntensity = parseFloat(e.target.value);
+            document.getElementById('corona-val').textContent = `${glowIntensity.toFixed(1)}x`;
+            bloomPass.strength = 1.2 * glowIntensity;
+        });
+        document.getElementById('rotation-slider').addEventListener('input', (e) => {
+            rotationSpeed = parseFloat(e.target.value);
+            document.getElementById('rotation-val').textContent = `${rotationSpeed.toFixed(1)}x`;
+        });
+        document.getElementById('time-slider').addEventListener('input', (e) => {
+            timeScale = parseFloat(e.target.value);
+            document.getElementById('time-val').textContent = `${timeScale.toFixed(1)}x`;
+        });
+
+        // Star type buttons
+        document.querySelectorAll('#star-type button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#star-type button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const type = btn.id.replace('btn-', '');
+                setStarType(type);
+            });
+        });
+
+        function setStarType(type) {
+            currentPreset = starPresets[type];
+            updateUI();
+            updateStarMaterials();
+        }
+
+        function updateUI() {
+            document.getElementById('star-name').textContent = currentPreset.name;
+            document.getElementById('star-class').textContent = currentPreset.class;
+            document.getElementById('stat-temp').textContent = currentPreset.temperature.toLocaleString() + ' K';
+            document.getElementById('stat-radius').textContent = currentPreset.radius + ' R☉';
+            document.getElementById('stat-luminosity').textContent = currentPreset.luminosity + ' L☉';
+            document.getElementById('stat-spectral').textContent = currentPreset.spectral;
+            document.getElementById('stat-core').textContent = currentPreset.coreTemp;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // POST-PROCESSING - Bloom creates the natural glow
+        // ═══════════════════════════════════════════════════════════════
+
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        // Bloom creates the soft, natural corona glow
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.2,   // strength - creates soft glow
+            0.8,   // radius - how far the glow spreads
+            0.2    // threshold - low so star surface glows
+        );
+        composer.addPass(bloomPass);
+
+        // ═══════════════════════════════════════════════════════════════
+        // STELLAR SURFACE - Photosphere with granulation
+        // ═══════════════════════════════════════════════════════════════
+
+        const starRadius = 15;
+
+        const photosphereShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uColor1: { value: currentPreset.color1 },
+                uColor2: { value: currentPreset.color2 },
+                uColor3: { value: currentPreset.color3 },
+                uGranuleScale: { value: currentPreset.granuleScale },
+                uSpotFrequency: { value: currentPreset.spotFrequency },
+                uActivityLevel: { value: 1.0 },
+                uRotationSpeed: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+                varying vec3 vWorldPosition;
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+                    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform vec3 uColor1;
+                uniform vec3 uColor2;
+                uniform vec3 uColor3;
+                uniform float uGranuleScale;
+                uniform float uSpotFrequency;
+                uniform float uActivityLevel;
+                uniform float uRotationSpeed;
+
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+                varying vec3 vWorldPosition;
+
+                // Simplex noise functions
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+                    vec3 i = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+
+                    i = mod289(i);
+                    vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+
+                    vec4 x = x_ * ns.x + ns.yyyy;
+                    vec4 y = y_ * ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+
+                    vec4 s0 = floor(b0) * 2.0 + 1.0;
+                    vec4 s1 = floor(b1) * 2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+
+                    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+
+                    vec3 p0 = vec3(a0.xy, h.x);
+                    vec3 p1 = vec3(a0.zw, h.y);
+                    vec3 p2 = vec3(a1.xy, h.z);
+                    vec3 p3 = vec3(a1.zw, h.w);
+
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x;
+                    p1 *= norm.y;
+                    p2 *= norm.z;
+                    p3 *= norm.w;
+
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                float fbm(vec3 p, int octaves) {
+                    float value = 0.0;
+                    float amplitude = 0.5;
+                    float frequency = 1.0;
+
+                    for (int i = 0; i < 6; i++) {
+                        if (i >= octaves) break;
+                        value += amplitude * snoise(p * frequency);
+                        amplitude *= 0.5;
+                        frequency *= 2.0;
+                    }
+                    return value;
+                }
+
+                // Granulation pattern - convection cells
+                float granulation(vec3 p, float scale) {
+                    vec3 sp = p * scale * 8.0;
+                    float n1 = snoise(sp);
+                    float n2 = snoise(sp * 2.0 + 100.0);
+                    float n3 = snoise(sp * 4.0 + 200.0);
+                    float granules = abs(n1) * 0.5 + abs(n2) * 0.3 + abs(n3) * 0.2;
+                    granules = pow(granules, 0.8);
+                    return granules;
+                }
+
+                // Sunspots
+                float sunspots(vec3 p, float time, float frequency) {
+                    float spots = 0.0;
+                    vec3 sp1 = p * 2.0 + vec3(time * 0.02, 0.0, 0.0);
+                    float n1 = snoise(sp1);
+
+                    if (n1 > 0.6 - frequency * 0.3) {
+                        float spotIntensity = smoothstep(0.6 - frequency * 0.3, 0.8, n1);
+                        float detail = snoise(p * 15.0 + time * 0.1);
+                        spots = spotIntensity * (0.7 + detail * 0.3);
+                    }
+                    return spots * frequency;
+                }
+
+                // Faculae - bright regions near limb
+                float faculae(vec3 p, float time, vec3 viewDir, vec3 normal) {
+                    float limb = 1.0 - max(0.0, dot(viewDir, normal));
+                    float n = snoise(p * 6.0 + time * 0.05);
+                    float fac = smoothstep(0.3, 0.7, n) * limb * limb;
+                    return fac * 0.3;
+                }
+
+                void main() {
+                    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+
+                    // Limb darkening - realistic solar limb effect
+                    float cosAngle = max(0.0, dot(viewDir, vNormal));
+                    float limbDarkening = 0.4 + 0.6 * pow(cosAngle, 0.5);
+
+                    // Rotating coordinates
+                    float rotation = uTime * 0.05 * uRotationSpeed;
+                    vec3 rotatedPos = vPosition;
+                    rotatedPos.x = vPosition.x * cos(rotation) - vPosition.z * sin(rotation);
+                    rotatedPos.z = vPosition.x * sin(rotation) + vPosition.z * cos(rotation);
+
+                    // Granulation
+                    float granules = granulation(rotatedPos + uTime * 0.01, uGranuleScale);
+
+                    // Sunspots
+                    float spots = sunspots(rotatedPos, uTime, uSpotFrequency * uActivityLevel);
+
+                    // Faculae
+                    float fac = faculae(rotatedPos, uTime, viewDir, vNormal) * uActivityLevel;
+
+                    // Supergranulation
+                    float superGranules = fbm(rotatedPos * 0.5 + uTime * 0.002, 3) * 0.15;
+
+                    // Base color from temperature
+                    vec3 baseColor = mix(uColor1, uColor2, granules);
+                    baseColor = mix(baseColor, uColor3, fac + superGranules);
+
+                    // Apply sunspots (dark regions)
+                    baseColor = mix(baseColor, uColor1 * 0.15, spots);
+
+                    // Apply limb darkening
+                    baseColor *= limbDarkening;
+
+                    // Subtle pulsation
+                    float pulse = 1.0 + sin(uTime * 0.5) * 0.02 * uActivityLevel;
+                    baseColor *= pulse;
+
+                    // Boost brightness slightly for bloom to work nicely
+                    baseColor *= 1.1;
+
+                    gl_FragColor = vec4(baseColor, 1.0);
+                }
+            `
+        };
+
+        const photosphereMat = new THREE.ShaderMaterial({
+            uniforms: photosphereShader.uniforms,
+            vertexShader: photosphereShader.vertexShader,
+            fragmentShader: photosphereShader.fragmentShader
+        });
+
+        const photosphereGeo = new THREE.SphereGeometry(starRadius, 128, 128);
+        const photosphere = new THREE.Mesh(photosphereGeo, photosphereMat);
+        scene.add(photosphere);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SOLAR PROMINENCES - Magnetic loops
+        // ═══════════════════════════════════════════════════════════════
+
+        function createProminence(startAngle, height, width) {
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(
+                    Math.cos(startAngle) * starRadius,
+                    0,
+                    Math.sin(startAngle) * starRadius
+                ),
+                new THREE.Vector3(
+                    Math.cos(startAngle + width * 0.3) * (starRadius + height * 0.5),
+                    height * 0.7,
+                    Math.sin(startAngle + width * 0.3) * (starRadius + height * 0.5)
+                ),
+                new THREE.Vector3(
+                    Math.cos(startAngle + width * 0.5) * (starRadius + height),
+                    height,
+                    Math.sin(startAngle + width * 0.5) * (starRadius + height)
+                ),
+                new THREE.Vector3(
+                    Math.cos(startAngle + width * 0.7) * (starRadius + height * 0.5),
+                    height * 0.7,
+                    Math.sin(startAngle + width * 0.7) * (starRadius + height * 0.5)
+                ),
+                new THREE.Vector3(
+                    Math.cos(startAngle + width) * starRadius,
+                    0,
+                    Math.sin(startAngle + width) * starRadius
+                )
+            ]);
+
+            const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.2, 8, false);
+            const tubeMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uColor: { value: new THREE.Color(0xff4400) }
+                },
+                vertexShader: `
+                    varying vec3 vPosition;
+                    varying float vProgress;
+
+                    void main() {
+                        vPosition = position;
+                        vProgress = uv.x;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float uTime;
+                    uniform vec3 uColor;
+                    varying vec3 vPosition;
+                    varying float vProgress;
+
+                    void main() {
+                        float flow = sin(vProgress * 20.0 - uTime * 3.0) * 0.5 + 0.5;
+                        float fade = sin(vProgress * 3.14159);
+                        vec3 color = uColor * (0.8 + flow * 0.4) * fade;
+                        float alpha = fade * 0.7;
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            return new THREE.Mesh(tubeGeo, tubeMat);
+        }
+
+        const prominences = [];
+        for (let i = 0; i < 4; i++) {
+            const prominence = createProminence(
+                Math.random() * Math.PI * 2,
+                2 + Math.random() * 3,
+                0.3 + Math.random() * 0.3
+            );
+            prominences.push(prominence);
+            scene.add(prominence);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SOLAR FLARES - Energetic eruptions
+        // ═══════════════════════════════════════════════════════════════
+
+        const flareCount = 300;
+        const flareGeo = new THREE.BufferGeometry();
+        const flarePositions = new Float32Array(flareCount * 3);
+        const flareVelocities = [];
+        const flareLifetimes = new Float32Array(flareCount);
+
+        for (let i = 0; i < flareCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            flarePositions[i * 3] = starRadius * Math.sin(phi) * Math.cos(theta);
+            flarePositions[i * 3 + 1] = starRadius * Math.sin(phi) * Math.sin(theta);
+            flarePositions[i * 3 + 2] = starRadius * Math.cos(phi);
+
+            const speed = 0.03 + Math.random() * 0.1;
+            flareVelocities.push({
+                x: Math.sin(phi) * Math.cos(theta) * speed,
+                y: Math.sin(phi) * Math.sin(theta) * speed,
+                z: Math.cos(phi) * speed
+            });
+
+            flareLifetimes[i] = Math.random();
+        }
+
+        flareGeo.setAttribute('position', new THREE.BufferAttribute(flarePositions, 3));
+
+        const flareMat = new THREE.PointsMaterial({
+            color: 0xffaa44,
+            size: 0.167,
+            transparent: true,
+            opacity: 0.5,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const flares = new THREE.Points(flareGeo, flareMat);
+        scene.add(flares);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SOLAR WIND PARTICLES
+        // ═══════════════════════════════════════════════════════════════
+
+        const windCount = 1000;
+        const windGeo = new THREE.BufferGeometry();
+        const windPositions = new Float32Array(windCount * 3);
+        const windVelocities = [];
+
+        for (let i = 0; i < windCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = starRadius * 1.2 + Math.random() * starRadius * 2;
+
+            windPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            windPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            windPositions[i * 3 + 2] = r * Math.cos(phi);
+
+            windVelocities.push({
+                speed: 0.015 + Math.random() * 0.03,
+                theta: theta,
+                phi: phi
+            });
+        }
+
+        windGeo.setAttribute('position', new THREE.BufferAttribute(windPositions, 3));
+
+        const windMat = new THREE.PointsMaterial({
+            color: 0xffffcc,
+            size: 0.053,
+            transparent: true,
+            opacity: 0.2,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const solarWind = new THREE.Points(windGeo, windMat);
+        scene.add(solarWind);
+
+        // ═══════════════════════════════════════════════════════════════
+        // STARFIELD BACKGROUND
+        // ═══════════════════════════════════════════════════════════════
+
+        const bgStarCount = 8000;
+        const bgStarGeo = new THREE.BufferGeometry();
+        const bgStarPositions = new Float32Array(bgStarCount * 3);
+        const bgStarColors = new Float32Array(bgStarCount * 3);
+
+        for (let i = 0; i < bgStarCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 500 + Math.random() * 1500;
+
+            bgStarPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            bgStarPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            bgStarPositions[i * 3 + 2] = r * Math.cos(phi);
+
+            const hue = Math.random() * 0.15;
+            const sat = Math.random() * 0.3;
+            const light = 0.7 + Math.random() * 0.3;
+            const col = new THREE.Color().setHSL(hue, sat, light);
+
+            bgStarColors[i * 3] = col.r;
+            bgStarColors[i * 3 + 1] = col.g;
+            bgStarColors[i * 3 + 2] = col.b;
+        }
+
+        bgStarGeo.setAttribute('position', new THREE.BufferAttribute(bgStarPositions, 3));
+        bgStarGeo.setAttribute('color', new THREE.BufferAttribute(bgStarColors, 3));
+
+        const bgStarMat = new THREE.PointsMaterial({
+            size: 1.0,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const bgStars = new THREE.Points(bgStarGeo, bgStarMat);
+        scene.add(bgStars);
+
+        // ═══════════════════════════════════════════════════════════════
+        // UPDATE STAR MATERIALS
+        // ═══════════════════════════════════════════════════════════════
+
+        function updateStarMaterials() {
+            photosphereMat.uniforms.uColor1.value = currentPreset.color1;
+            photosphereMat.uniforms.uColor2.value = currentPreset.color2;
+            photosphereMat.uniforms.uColor3.value = currentPreset.color3;
+            photosphereMat.uniforms.uGranuleScale.value = currentPreset.granuleScale;
+            photosphereMat.uniforms.uSpotFrequency.value = currentPreset.spotFrequency;
+
+            prominences.forEach(p => {
+                p.material.uniforms.uColor.value = currentPreset.color1;
+            });
+
+            flareMat.color = currentPreset.color2;
+
+            // Adjust bloom for different star types
+            if (currentPreset === starPresets['blue-giant']) {
+                bloomPass.strength = 1.5 * glowIntensity;
+            } else if (currentPreset === starPresets['white-dwarf']) {
+                bloomPass.strength = 1.4 * glowIntensity;
+            } else {
+                bloomPass.strength = 1.2 * glowIntensity;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ANIMATION LOOP
+        // ═══════════════════════════════════════════════════════════════
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime() * timeScale;
+
+            // Update shader uniforms
+            photosphereMat.uniforms.uTime.value = time;
+            photosphereMat.uniforms.uActivityLevel.value = activityLevel;
+            photosphereMat.uniforms.uRotationSpeed.value = rotationSpeed;
+
+            // Rotate star
+            photosphere.rotation.y = time * 0.02 * rotationSpeed;
+
+            // Update prominences
+            prominences.forEach((p, i) => {
+                p.material.uniforms.uTime.value = time;
+                p.rotation.y = time * 0.01 * rotationSpeed + i * 0.5;
+                p.visible = activityLevel > 0.5;
+            });
+
+            // Update flare particles - activity affects count, not speed
+            const flarePos = flares.geometry.attributes.position.array;
+            const activeFlareCount = Math.floor(flareCount * activityLevel / 3.0 * currentPreset.flareIntensity);
+            for (let i = 0; i < flareCount; i++) {
+                // Hide particles beyond active count
+                if (i >= activeFlareCount) {
+                    flarePos[i * 3] = 0;
+                    flarePos[i * 3 + 1] = 0;
+                    flarePos[i * 3 + 2] = 0;
+                    continue;
+                }
+
+                flareLifetimes[i] += 0.008 * currentPreset.flareIntensity;
+
+                if (flareLifetimes[i] > 1.0) {
+                    flareLifetimes[i] = 0;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+
+                    flarePos[i * 3] = starRadius * Math.sin(phi) * Math.cos(theta);
+                    flarePos[i * 3 + 1] = starRadius * Math.sin(phi) * Math.sin(theta);
+                    flarePos[i * 3 + 2] = starRadius * Math.cos(phi);
+
+                    const speed = 0.03 + Math.random() * 0.1;
+                    flareVelocities[i].x = Math.sin(phi) * Math.cos(theta) * speed;
+                    flareVelocities[i].y = Math.sin(phi) * Math.sin(theta) * speed;
+                    flareVelocities[i].z = Math.cos(phi) * speed;
+                } else {
+                    flarePos[i * 3] += flareVelocities[i].x;
+                    flarePos[i * 3 + 1] += flareVelocities[i].y;
+                    flarePos[i * 3 + 2] += flareVelocities[i].z;
+                }
+            }
+            flares.geometry.attributes.position.needsUpdate = true;
+            flares.material.opacity = 0.5;
+
+            // Update solar wind - activity affects count, not speed
+            const windPos = solarWind.geometry.attributes.position.array;
+            const activeWindCount = Math.floor(windCount * activityLevel / 3.0);
+            for (let i = 0; i < windCount; i++) {
+                // Hide particles beyond active count
+                if (i >= activeWindCount) {
+                    windPos[i * 3] = 0;
+                    windPos[i * 3 + 1] = 0;
+                    windPos[i * 3 + 2] = 0;
+                    continue;
+                }
+
+                const vel = windVelocities[i];
+                const r = Math.sqrt(
+                    windPos[i * 3] ** 2 +
+                    windPos[i * 3 + 1] ** 2 +
+                    windPos[i * 3 + 2] ** 2
+                );
+
+                windPos[i * 3] += Math.sin(vel.phi) * Math.cos(vel.theta) * vel.speed;
+                windPos[i * 3 + 1] += Math.sin(vel.phi) * Math.sin(vel.theta) * vel.speed;
+                windPos[i * 3 + 2] += Math.cos(vel.phi) * vel.speed;
+
+                if (r > starRadius * 4) {
+                    const newR = starRadius * 1.2;
+                    windPos[i * 3] = newR * Math.sin(vel.phi) * Math.cos(vel.theta);
+                    windPos[i * 3 + 1] = newR * Math.sin(vel.phi) * Math.sin(vel.theta);
+                    windPos[i * 3 + 2] = newR * Math.cos(vel.phi);
+                }
+            }
+            solarWind.geometry.attributes.position.needsUpdate = true;
+
+            controls.update();
+            composer.render();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // RESIZE HANDLER
+        // ═══════════════════════════════════════════════════════════════
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize
+        updateUI();
+        animate();
+    </script>
+</body>
+</html>

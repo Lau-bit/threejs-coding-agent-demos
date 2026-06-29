@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Supernova Explosion</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+        }
+        canvas { display: block; }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 200, 150, 0.6);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 12px;
+            letter-spacing: 2px;
+            pointer-events: none;
+            text-align: center;
+            text-transform: uppercase;
+        }
+        #title {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 220, 180, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 18px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-align: center;
+        }
+        #title span {
+            display: block;
+            font-size: 11px;
+            color: rgba(255, 180, 120, 0.5);
+            margin-top: 5px;
+            letter-spacing: 3px;
+        }
+        #controls {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(20, 10, 0, 0.85);
+            padding: 15px 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 180, 100, 0.2);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            z-index: 100;
+        }
+        #controls label {
+            display: block;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        #controls input[type="range"] {
+            width: 140px;
+            margin: 5px 0 15px 0;
+            accent-color: #ffaa60;
+        }
+        .control-value {
+            font-size: 10px;
+            color: rgba(255, 220, 180, 0.7);
+            margin-left: 8px;
+        }
+        #controls button {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            margin: 8px 0;
+            background: rgba(255, 100, 50, 0.2);
+            border: 1px solid rgba(255, 150, 80, 0.4);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        #controls button:hover {
+            background: rgba(255, 100, 50, 0.4);
+            border-color: rgba(255, 180, 100, 0.6);
+        }
+        #stats {
+            position: fixed;
+            bottom: 60px;
+            left: 20px;
+            background: rgba(20, 10, 0, 0.7);
+            padding: 12px 16px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 150, 80, 0.15);
+            color: rgba(255, 180, 120, 0.7);
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+        #stats div {
+            margin: 3px 0;
+        }
+        #stats span {
+            color: rgba(255, 220, 180, 0.9);
+        }
+        #phase-indicator {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(20, 10, 0, 0.85);
+            padding: 15px 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 180, 100, 0.2);
+            color: rgba(255, 200, 150, 0.9);
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-size: 11px;
+            letter-spacing: 1px;
+            z-index: 100;
+            min-width: 180px;
+        }
+        #phase-indicator .phase-name {
+            font-size: 13px;
+            color: rgba(255, 220, 180, 0.95);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        #phase-indicator .phase-desc {
+            font-size: 10px;
+            color: rgba(255, 180, 120, 0.7);
+            line-height: 1.4;
+        }
+        #progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 150, 80, 0.2);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        #progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6622, #ffaa44);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">
+        Type II-P Supernova
+        <span>Core-Collapse of a 20 M☉ Red Supergiant</span>
+    </div>
+    <div id="info">Mouse: Orbit | Scroll: Zoom | Space: Trigger Supernova</div>
+
+    <div id="phase-indicator">
+        <div class="phase-name" id="phase-name">Pre-Supernova Star</div>
+        <div class="phase-desc" id="phase-desc">Massive star in final stages of silicon burning. Iron core approaching Chandrasekhar limit.</div>
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+
+    <div id="controls">
+        <label>Time Scale <span class="control-value" id="time-val">1.0x</span></label>
+        <input type="range" id="time-slider" min="0.1" max="5" step="0.1" value="1">
+
+        <label>Explosion Energy <span class="control-value" id="energy-val">1.0 B</span></label>
+        <input type="range" id="energy-slider" min="0.5" max="3" step="0.1" value="1">
+
+        <label>Progenitor Mass <span class="control-value" id="mass-val">20 M☉</span></label>
+        <input type="range" id="mass-slider" min="8" max="40" step="1" value="20">
+
+        <button id="btn-trigger">Trigger Core Collapse</button>
+        <button id="btn-reset">Reset Simulation</button>
+    </div>
+
+    <div id="stats">
+        <div>PHASE TIME: <span id="stat-time">T - 0.00 s</span></div>
+        <div>CORE TEMP: <span id="stat-temp">3.5 × 10⁹ K</span></div>
+        <div>SHOCK VELOCITY: <span id="stat-velocity">0 km/s</span></div>
+        <div>EJECTA MASS: <span id="stat-ejecta">0 M☉</span></div>
+        <div>LUMINOSITY: <span id="stat-luminosity">1.2 × 10⁵ L☉</span></div>
+        <div>REMNANT: <span id="stat-remnant">Forming...</span></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+        // ═══════════════════════════════════════════════════════════════
+        // PHYSICS CONSTANTS (scaled for visualization)
+        // ═══════════════════════════════════════════════════════════════
+
+        // Real supernova physics:
+        // - Core collapse takes ~100ms
+        // - Shock breakout ~hours after collapse
+        // - Peak luminosity ~10^10 L☉ (10 billion solar luminosities)
+        // - Shock velocity ~10,000-30,000 km/s
+        // - Ejecta velocity ~3,000-10,000 km/s
+        // - Nickel-56 decay powers the light curve
+
+        const PHASES = {
+            PRE_COLLAPSE: 0,      // Stable star
+            CORE_COLLAPSE: 1,     // Iron core collapse (~100ms)
+            BOUNCE: 2,            // Core bounce at nuclear density
+            SHOCK_STALL: 3,       // Shock stalls, neutrino heating
+            SHOCK_REVIVAL: 4,     // Neutrino-driven explosion
+            SHOCK_BREAKOUT: 5,    // Shock reaches surface
+            EXPANSION: 6,         // Free expansion phase
+            REMNANT_FORMATION: 7  // Neutron star or black hole forms
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // SCENE SETUP
+        // ═══════════════════════════════════════════════════════════════
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50000);
+        camera.position.set(0, 30, 80);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 500;
+        controls.minDistance = 15;
+
+        // ═══════════════════════════════════════════════════════════════
+        // SIMULATION STATE
+        // ═══════════════════════════════════════════════════════════════
+
+        let currentPhase = PHASES.PRE_COLLAPSE;
+        let phaseTime = 0;
+        let totalTime = 0;
+        let timeScale = 1.0;
+        let explosionEnergy = 1.0; // In units of 10^51 ergs (1 Bethe)
+        let progenitorMass = 20;   // Solar masses
+
+        // Derived quantities
+        let coreRadius = 15;       // Visual units
+        let envelopeRadius = 25;
+        let shockRadius = 0;
+        let shockVelocity = 0;
+        let coreDensity = 1.0;
+        let coreTemperature = 3.5e9;
+        let luminosity = 1.2e5;
+        let ejectaMass = 0;
+
+        // ═══════════════════════════════════════════════════════════════
+        // POST-PROCESSING
+        // ═══════════════════════════════════════════════════════════════
+
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5,   // strength
+            0.8,   // radius
+            0.1    // threshold
+        );
+        composer.addPass(bloomPass);
+
+        // Gravitational lensing shader for black hole remnant
+        const GravitationalLensingShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                uBlackHolePos: { value: new THREE.Vector2(0.5, 0.5) },
+                uBlackHoleRadius: { value: 0.05 },
+                uAspect: { value: window.innerWidth / window.innerHeight },
+                uTime: { value: 0 },
+                uLensingStrength: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform vec2 uBlackHolePos;
+                uniform float uBlackHoleRadius;
+                uniform float uAspect;
+                uniform float uTime;
+                uniform float uLensingStrength;
+                varying vec2 vUv;
+
+                void main() {
+                    vec2 uv = vUv;
+
+                    // Only apply lensing when black hole is visible
+                    if (uLensingStrength < 0.01) {
+                        gl_FragColor = texture2D(tDiffuse, uv);
+                        return;
+                    }
+
+                    vec2 center = uBlackHolePos;
+                    vec2 diff = uv - center;
+                    diff.x *= uAspect;
+
+                    float dist = length(diff);
+                    float rs = uBlackHoleRadius * uLensingStrength;
+
+                    // Event horizon shadow - complete darkness (appears ~2.6 rs due to lensing)
+                    float shadowRadius = rs * 2.6;
+                    if (dist < shadowRadius) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+
+                    // Gravitational lensing extends far beyond the black hole
+                    float lensingRange = rs * 15.0;
+
+                    if (dist < lensingRange) {
+                        float impactParam = dist;
+
+                        // Deflection strength - falls off with distance
+                        float deflectionStrength = rs * rs / (impactParam * impactParam);
+
+                        // Enhanced lensing near photon sphere
+                        float photonSphereRadius = rs * 1.5 * 2.6;
+                        if (dist < photonSphereRadius * 1.5 && dist > shadowRadius) {
+                            float proximity = 1.0 - (dist - shadowRadius) / (photonSphereRadius * 1.5 - shadowRadius);
+                            deflectionStrength += proximity * proximity * 0.8;
+                        }
+
+                        vec2 toCenter = normalize(diff);
+
+                        // UV offset - light bends toward the hole
+                        float uvOffset = deflectionStrength * 0.5;
+                        uvOffset = min(uvOffset, 0.4);
+
+                        vec2 lensedUV = uv + toCenter * uvOffset;
+                        lensedUV = clamp(lensedUV, 0.0, 1.0);
+
+                        vec4 color = texture2D(tDiffuse, lensedUV);
+
+                        // Einstein ring effect
+                        float ringDist = abs(dist - shadowRadius * 1.1);
+                        float ringWidth = rs * 0.5;
+                        if (ringDist < ringWidth) {
+                            float ringBrightness = 1.0 - ringDist / ringWidth;
+                            color.rgb *= 1.0 + ringBrightness * 0.3;
+                        }
+
+                        // Gravitational redshift near the shadow
+                        if (dist < shadowRadius * 2.0) {
+                            float redshiftProximity = 1.0 - (dist - shadowRadius) / shadowRadius;
+                            color.r *= 1.0 + redshiftProximity * 0.15;
+                            color.gb *= 1.0 - redshiftProximity * 0.1;
+                        }
+
+                        gl_FragColor = color;
+                        return;
+                    }
+
+                    gl_FragColor = texture2D(tDiffuse, uv);
+                }
+            `
+        };
+
+        const lensingPass = new ShaderPass(GravitationalLensingShader);
+        composer.addPass(lensingPass);
+
+        // Flash overlay shader for bright explosion fadeout
+        const FlashOverlayShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                uFlashIntensity: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float uFlashIntensity;
+                varying vec2 vUv;
+
+                void main() {
+                    vec4 color = texture2D(tDiffuse, vUv);
+                    // Add white flash that fades out smoothly
+                    vec3 flashColor = vec3(1.0, 0.98, 0.9); // Slightly warm white
+                    color.rgb = mix(color.rgb, flashColor, uFlashIntensity);
+                    gl_FragColor = color;
+                }
+            `
+        };
+
+        const flashPass = new ShaderPass(FlashOverlayShader);
+        composer.addPass(flashPass);
+
+        // Smooth brightness transition variables
+        let targetBloomStrength = 1.5;
+        let currentBloomStrength = 1.5;
+        const bloomLerpSpeed = 3.0; // How fast bloom transitions
+
+        // Main bright explosion flash control (for 0.25sec fadeout)
+        let flashIntensity = 0;
+        let flashFadeStartTime = -1;
+        const flashFadeDuration = 0.25; // 0.25 seconds to fade out
+
+        // ═══════════════════════════════════════════════════════════════
+        // PROGENITOR STAR - Red Supergiant with layered structure
+        // ═══════════════════════════════════════════════════════════════
+
+        // Iron core shader - degenerate matter
+        const ironCoreShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uCollapse: { value: 0 },
+                uTemperature: { value: 1.0 },
+                uDensity: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                uniform float uCollapse;
+                uniform float uDensity;
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+
+                    // Core collapse - shrinking
+                    float scale = 1.0 - uCollapse * 0.9;
+                    vec3 collapsedPos = position * scale;
+
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(collapsedPos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uCollapse;
+                uniform float uTemperature;
+                uniform float uDensity;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod289(i);
+                    vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+                    vec4 x = x_ * ns.x + ns.yyyy;
+                    vec4 y = y_ * ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+                    vec4 s0 = floor(b0) * 2.0 + 1.0;
+                    vec4 s1 = floor(b1) * 2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                    vec3 p0 = vec3(a0.xy, h.x);
+                    vec3 p1 = vec3(a0.zw, h.y);
+                    vec3 p2 = vec3(a1.xy, h.z);
+                    vec3 p3 = vec3(a1.zw, h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                void main() {
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 2.0);
+
+                    // Iron core is incredibly hot and dense
+                    // During collapse, temperature increases dramatically
+                    float temp = uTemperature;
+
+                    // Base iron core color - blue-white at extreme temperature
+                    vec3 coreColor;
+                    if (temp < 2.0) {
+                        // Pre-collapse: very hot but stable
+                        coreColor = vec3(0.8, 0.6, 0.4);
+                    } else if (temp < 5.0) {
+                        // Early collapse: heating up
+                        coreColor = vec3(1.0, 0.8, 0.5);
+                    } else {
+                        // Peak collapse: extreme temperature
+                        coreColor = vec3(1.0, 1.0, 0.9);
+                    }
+
+                    // Convective motion in the core
+                    float turbulence = snoise(vPosition * 0.5 + uTime * 0.5) * 0.2;
+
+                    // Collapse intensifies everything
+                    float intensity = 1.0 + uCollapse * 3.0;
+                    coreColor *= intensity * (0.8 + turbulence);
+
+                    // Fresnel glow
+                    coreColor += vec3(1.0, 0.7, 0.4) * fresnel * (1.0 + uCollapse);
+
+                    gl_FragColor = vec4(coreColor, 1.0);
+                }
+            `
+        };
+
+        const ironCoreMat = new THREE.ShaderMaterial({
+            uniforms: ironCoreShader.uniforms,
+            vertexShader: ironCoreShader.vertexShader,
+            fragmentShader: ironCoreShader.fragmentShader
+        });
+
+        const ironCoreGeo = new THREE.SphereGeometry(3, 64, 64);
+        const ironCore = new THREE.Mesh(ironCoreGeo, ironCoreMat);
+        scene.add(ironCore);
+
+        // Silicon/Oxygen shell
+        const shellShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uCollapse: { value: 0 },
+                uExpansion: { value: 0 },
+                uShockRadius: { value: 0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying float vRadius;
+                uniform float uCollapse;
+                uniform float uExpansion;
+                uniform float uShockRadius;
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+                    vRadius = length(position);
+
+                    vec3 expandedPos = position;
+
+                    // Expansion from shock wave
+                    float distFromCenter = length(position);
+                    if (distFromCenter < uShockRadius && uShockRadius > 0.0) {
+                        float expansion = uExpansion * smoothstep(0.0, uShockRadius, distFromCenter);
+                        expandedPos = position * (1.0 + expansion);
+                    }
+
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(expandedPos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uCollapse;
+                uniform float uExpansion;
+                uniform float uShockRadius;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying float vRadius;
+
+                void main() {
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 3.0);
+
+                    // Shell burning colors - silicon/oxygen
+                    vec3 shellColor = vec3(1.0, 0.5, 0.2);
+
+                    // Shock heating
+                    float shockProximity = 1.0 - abs(vRadius - uShockRadius) / 3.0;
+                    shockProximity = max(0.0, shockProximity);
+
+                    if (shockProximity > 0.0 && uShockRadius > 0.0) {
+                        shellColor = mix(shellColor, vec3(1.0, 1.0, 0.8), shockProximity);
+                    }
+
+                    shellColor += vec3(1.0, 0.6, 0.3) * fresnel * 0.5;
+
+                    float alpha = 0.7 * (1.0 - uExpansion * 0.3);
+
+                    gl_FragColor = vec4(shellColor, alpha);
+                }
+            `
+        };
+
+        const shellMat = new THREE.ShaderMaterial({
+            uniforms: shellShader.uniforms,
+            vertexShader: shellShader.vertexShader,
+            fragmentShader: shellShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const shellGeo = new THREE.SphereGeometry(8, 64, 64);
+        const shell = new THREE.Mesh(shellGeo, shellMat);
+        scene.add(shell);
+
+        // Hydrogen/Helium envelope - the red supergiant surface
+        const envelopeShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uExpansion: { value: 0 },
+                uShockRadius: { value: 0 },
+                uDisruption: { value: 0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+                uniform float uExpansion;
+                uniform float uShockRadius;
+                uniform float uDisruption;
+                uniform float uTime;
+
+                // Noise for disruption
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod289(i);
+                    vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+                    vec4 x = x_ * ns.x + ns.yyyy;
+                    vec4 y = y_ * ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+                    vec4 s0 = floor(b0) * 2.0 + 1.0;
+                    vec4 s1 = floor(b1) * 2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                    vec3 p0 = vec3(a0.xy, h.x);
+                    vec3 p1 = vec3(a0.zw, h.y);
+                    vec3 p2 = vec3(a1.xy, h.z);
+                    vec3 p3 = vec3(a1.zw, h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+                    vUv = uv;
+
+                    vec3 expandedPos = position;
+
+                    // Rayleigh-Taylor instabilities during expansion
+                    if (uDisruption > 0.0) {
+                        float noise = snoise(position * 0.3 + uTime * 0.2);
+                        float disruption = noise * uDisruption * 5.0;
+                        expandedPos = position * (1.0 + uExpansion + disruption);
+                    } else {
+                        expandedPos = position * (1.0 + uExpansion);
+                    }
+
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(expandedPos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uExpansion;
+                uniform float uShockRadius;
+                uniform float uDisruption;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod289(i);
+                    vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+                    vec4 x = x_ * ns.x + ns.yyyy;
+                    vec4 y = y_ * ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+                    vec4 s0 = floor(b0) * 2.0 + 1.0;
+                    vec4 s1 = floor(b1) * 2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                    vec3 p0 = vec3(a0.xy, h.x);
+                    vec3 p1 = vec3(a0.zw, h.y);
+                    vec3 p2 = vec3(a1.xy, h.z);
+                    vec3 p3 = vec3(a1.zw, h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                void main() {
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 2.0);
+
+                    // Red supergiant surface with convection
+                    float granulation = snoise(vPosition * 0.5 + uTime * 0.1) * 0.3 + 0.7;
+
+                    // Base red giant color
+                    vec3 surfaceColor = vec3(1.0, 0.3, 0.1) * granulation;
+
+                    // During shock breakout, surface heats dramatically
+                    if (uExpansion > 0.0) {
+                        float heating = min(uExpansion * 2.0, 1.0);
+                        surfaceColor = mix(surfaceColor, vec3(1.0, 0.8, 0.5), heating);
+
+                        // Shock breakout flash
+                        if (uExpansion < 0.5) {
+                            float flash = (0.5 - uExpansion) * 2.0;
+                            surfaceColor += vec3(1.0, 1.0, 0.9) * flash * flash;
+                        }
+                    }
+
+                    surfaceColor += vec3(1.0, 0.5, 0.3) * fresnel * 0.3;
+
+                    // Limb darkening
+                    float cosAngle = max(0.0, dot(viewDir, vNormal));
+                    float limbDarkening = 0.5 + 0.5 * pow(cosAngle, 0.4);
+                    surfaceColor *= limbDarkening;
+
+                    float alpha = max(0.0, 1.0 - uDisruption * 0.8);
+
+                    gl_FragColor = vec4(surfaceColor, alpha);
+                }
+            `
+        };
+
+        const envelopeMat = new THREE.ShaderMaterial({
+            uniforms: envelopeShader.uniforms,
+            vertexShader: envelopeShader.vertexShader,
+            fragmentShader: envelopeShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        const envelopeGeo = new THREE.SphereGeometry(envelopeRadius, 128, 128);
+        const envelope = new THREE.Mesh(envelopeGeo, envelopeMat);
+        scene.add(envelope);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SHOCK WAVE - The expanding blast
+        // ═══════════════════════════════════════════════════════════════
+
+        const shockWaveShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uRadius: { value: 0 },
+                uIntensity: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                uniform float uRadius;
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position * uRadius;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position * uRadius, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uRadius;
+                uniform float uIntensity;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+
+                void main() {
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 4.0);
+
+                    // Shock wave is brightest at the edge
+                    vec3 shockColor = vec3(1.0, 0.9, 0.7) * fresnel * uIntensity;
+
+                    // Add some blue-white at very high intensity
+                    if (uIntensity > 1.5) {
+                        shockColor += vec3(0.5, 0.7, 1.0) * (uIntensity - 1.5) * fresnel;
+                    }
+
+                    float alpha = fresnel * uIntensity * 0.5;
+
+                    gl_FragColor = vec4(shockColor, alpha);
+                }
+            `
+        };
+
+        const shockWaveMat = new THREE.ShaderMaterial({
+            uniforms: shockWaveShader.uniforms,
+            vertexShader: shockWaveShader.vertexShader,
+            fragmentShader: shockWaveShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const shockWaveGeo = new THREE.SphereGeometry(1, 128, 128);
+        const shockWave = new THREE.Mesh(shockWaveGeo, shockWaveMat);
+        shockWave.visible = false;
+        scene.add(shockWave);
+
+        // ═══════════════════════════════════════════════════════════════
+        // EJECTA PARTICLES - Expanding stellar material
+        // ═══════════════════════════════════════════════════════════════
+
+        const ejectaCount = 15000;
+        const ejectaGeo = new THREE.BufferGeometry();
+        const ejectaPositions = new Float32Array(ejectaCount * 3);
+        const ejectaVelocities = [];
+        const ejectaColors = new Float32Array(ejectaCount * 3);
+        const ejectaSizes = new Float32Array(ejectaCount);
+        const ejectaInitialRadii = new Float32Array(ejectaCount);
+
+        for (let i = 0; i < ejectaCount; i++) {
+            // Start all particles at origin, will be placed during explosion
+            ejectaPositions[i * 3] = 0;
+            ejectaPositions[i * 3 + 1] = 0;
+            ejectaPositions[i * 3 + 2] = 0;
+
+            // Random velocities with realistic distribution
+            // Faster ejecta near the poles (jet-like structure)
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            // Velocity magnitude - higher near poles
+            const polarFactor = 1.0 + Math.abs(Math.cos(phi)) * 0.5;
+            const speed = (0.5 + Math.random() * 1.5) * polarFactor;
+
+            ejectaVelocities.push({
+                x: Math.sin(phi) * Math.cos(theta) * speed,
+                y: Math.sin(phi) * Math.sin(theta) * speed,
+                z: Math.cos(phi) * speed,
+                delay: Math.random() * 2.0 // Staggered ejection
+            });
+
+            // Colors based on composition
+            // Inner ejecta: Iron-group elements (yellow/orange)
+            // Middle: Intermediate mass elements (green/blue)
+            // Outer: Hydrogen/Helium (red)
+            const layer = Math.random();
+            if (layer < 0.2) {
+                // Iron core material - bright yellow/white
+                ejectaColors[i * 3] = 1.0;
+                ejectaColors[i * 3 + 1] = 0.9;
+                ejectaColors[i * 3 + 2] = 0.5;
+                ejectaInitialRadii[i] = 3 + Math.random() * 3;
+            } else if (layer < 0.5) {
+                // Silicon/Oxygen - orange
+                ejectaColors[i * 3] = 1.0;
+                ejectaColors[i * 3 + 1] = 0.5;
+                ejectaColors[i * 3 + 2] = 0.2;
+                ejectaInitialRadii[i] = 6 + Math.random() * 5;
+            } else {
+                // Hydrogen envelope - red
+                ejectaColors[i * 3] = 1.0;
+                ejectaColors[i * 3 + 1] = 0.3;
+                ejectaColors[i * 3 + 2] = 0.1;
+                ejectaInitialRadii[i] = 11 + Math.random() * 14;
+            }
+
+            ejectaSizes[i] = 0.2 + Math.random() * 0.5;
+        }
+
+        ejectaGeo.setAttribute('position', new THREE.BufferAttribute(ejectaPositions, 3));
+        ejectaGeo.setAttribute('color', new THREE.BufferAttribute(ejectaColors, 3));
+        ejectaGeo.setAttribute('size', new THREE.BufferAttribute(ejectaSizes, 1));
+
+        const ejectaMat = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const ejecta = new THREE.Points(ejectaGeo, ejectaMat);
+        scene.add(ejecta);
+
+        // ═══════════════════════════════════════════════════════════════
+        // NEUTRINO BURST VISUALIZATION
+        // ═══════════════════════════════════════════════════════════════
+
+        const neutrinoCount = 3000;
+        const neutrinoGeo = new THREE.BufferGeometry();
+        const neutrinoPositions = new Float32Array(neutrinoCount * 3);
+        const neutrinoVelocities = [];
+
+        for (let i = 0; i < neutrinoCount; i++) {
+            neutrinoPositions[i * 3] = 0;
+            neutrinoPositions[i * 3 + 1] = 0;
+            neutrinoPositions[i * 3 + 2] = 0;
+
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            // Neutrinos travel at near light speed - very fast
+            const speed = 3.0 + Math.random() * 2.0;
+
+            neutrinoVelocities.push({
+                x: Math.sin(phi) * Math.cos(theta) * speed,
+                y: Math.sin(phi) * Math.sin(theta) * speed,
+                z: Math.cos(phi) * speed
+            });
+        }
+
+        neutrinoGeo.setAttribute('position', new THREE.BufferAttribute(neutrinoPositions, 3));
+
+        const neutrinoMat = new THREE.PointsMaterial({
+            color: 0x88aaff,
+            size: 0.15,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const neutrinos = new THREE.Points(neutrinoGeo, neutrinoMat);
+        scene.add(neutrinos);
+
+        // ═══════════════════════════════════════════════════════════════
+        // NEUTRON STAR REMNANT
+        // ═══════════════════════════════════════════════════════════════
+
+        const neutronStarShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uPulseRate: { value: 3.0 }, // Rotation period reduced to 1/10 for slower pulsing
+                uVisible: { value: 0 }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uPulseRate;
+                uniform float uVisible;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+
+                void main() {
+                    if (uVisible < 0.1) discard;
+
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - max(0.0, dot(viewDir, vNormal)), 2.0);
+
+                    // Neutron star is incredibly hot - blue-white
+                    vec3 nsColor = vec3(0.7, 0.8, 1.0);
+
+                    // Pulsar beam effect
+                    float pulse = sin(uTime * uPulseRate) * 0.5 + 0.5;
+                    float beamAngle = mod(uTime * uPulseRate * 0.1, 6.28318);
+
+                    // Hot spots at magnetic poles
+                    float poleGlow = pow(abs(vNormal.y), 8.0) * pulse * 2.0;
+                    nsColor += vec3(1.0, 1.0, 1.0) * poleGlow;
+
+                    nsColor += vec3(0.5, 0.7, 1.0) * fresnel;
+                    nsColor *= uVisible;
+
+                    gl_FragColor = vec4(nsColor, uVisible);
+                }
+            `
+        };
+
+        const neutronStarMat = new THREE.ShaderMaterial({
+            uniforms: neutronStarShader.uniforms,
+            vertexShader: neutronStarShader.vertexShader,
+            fragmentShader: neutronStarShader.fragmentShader,
+            transparent: true
+        });
+
+        // Neutron star is tiny - about 10-20 km radius (we scale it up for visibility)
+        const neutronStarGeo = new THREE.SphereGeometry(1.5, 64, 64);
+        const neutronStar = new THREE.Mesh(neutronStarGeo, neutronStarMat);
+        scene.add(neutronStar);
+
+        // ═══════════════════════════════════════════════════════════════
+        // BLACK HOLE REMNANT (for massive progenitors > 25 M☉)
+        // ═══════════════════════════════════════════════════════════════
+
+        const blackHoleGeo = new THREE.SphereGeometry(2, 64, 64);
+        const blackHoleMat = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0
+        });
+        const blackHole = new THREE.Mesh(blackHoleGeo, blackHoleMat);
+        scene.add(blackHole);
+
+        // Accretion disk for fallback material
+        const fallbackDiskShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uVisible: { value: 0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uVisible;
+                varying vec2 vUv;
+
+                void main() {
+                    if (uVisible < 0.1) discard;
+
+                    vec2 center = vec2(0.5, 0.5);
+                    float dist = length(vUv - center) * 2.0;
+
+                    if (dist < 0.2 || dist > 1.0) discard;
+
+                    float angle = atan(vUv.y - 0.5, vUv.x - 0.5);
+                    float spiral = sin(angle * 3.0 - uTime * 2.0 - dist * 10.0) * 0.5 + 0.5;
+
+                    vec3 diskColor = mix(
+                        vec3(1.0, 0.3, 0.1),
+                        vec3(1.0, 0.8, 0.4),
+                        1.0 - dist
+                    );
+
+                    diskColor *= spiral * (1.0 - dist) * 2.0;
+
+                    float alpha = (1.0 - dist) * spiral * uVisible * 0.8;
+
+                    gl_FragColor = vec4(diskColor, alpha);
+                }
+            `
+        };
+
+        const fallbackDiskMat = new THREE.ShaderMaterial({
+            uniforms: fallbackDiskShader.uniforms,
+            vertexShader: fallbackDiskShader.vertexShader,
+            fragmentShader: fallbackDiskShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const fallbackDiskGeo = new THREE.RingGeometry(2.5, 12, 128, 32);
+        const fallbackDisk = new THREE.Mesh(fallbackDiskGeo, fallbackDiskMat);
+        fallbackDisk.rotation.x = -Math.PI / 2;
+        scene.add(fallbackDisk);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SUPERNOVA REMNANT NEBULA
+        // ═══════════════════════════════════════════════════════════════
+
+        const nebulaShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uExpansion: { value: 0 },
+                uVisible: { value: 0 }
+            },
+            vertexShader: `
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+                uniform float uExpansion;
+
+                void main() {
+                    vPosition = position;
+                    vNormal = normalize(normalMatrix * normal);
+                    vec3 expanded = position * (1.0 + uExpansion * 5.0);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(expanded, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform float uExpansion;
+                uniform float uVisible;
+                varying vec3 vPosition;
+                varying vec3 vNormal;
+
+                // Noise functions
+                vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+                vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+                float snoise(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod289(i);
+                    vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                    float n_ = 0.142857142857;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+                    vec4 x = x_ * ns.x + ns.yyyy;
+                    vec4 y = y_ * ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+                    vec4 s0 = floor(b0) * 2.0 + 1.0;
+                    vec4 s1 = floor(b1) * 2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+                    vec3 p0 = vec3(a0.xy, h.x);
+                    vec3 p1 = vec3(a0.zw, h.y);
+                    vec3 p2 = vec3(a1.xy, h.z);
+                    vec3 p3 = vec3(a1.zw, h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+                    p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                float fbm(vec3 p) {
+                    float value = 0.0;
+                    float amplitude = 0.5;
+                    for (int i = 0; i < 5; i++) {
+                        value += amplitude * snoise(p);
+                        p *= 2.0;
+                        amplitude *= 0.5;
+                    }
+                    return value;
+                }
+
+                void main() {
+                    if (uVisible < 0.01) discard;
+
+                    vec3 viewDir = normalize(cameraPosition - vPosition);
+                    float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 2.0);
+
+                    // Filamentary structure
+                    float filaments = fbm(vPosition * 0.3 + uTime * 0.05);
+                    filaments = pow(abs(filaments), 0.5);
+
+                    // Rayleigh-Taylor fingers
+                    float fingers = snoise(vPosition * 0.5 + vec3(uTime * 0.1, 0.0, 0.0));
+                    fingers = smoothstep(0.2, 0.8, fingers);
+
+                    // Color based on composition and ionization
+                    // Oxygen: green/teal [O III]
+                    // Hydrogen: red (H-alpha)
+                    // Sulfur: red [S II]
+                    vec3 oxygenColor = vec3(0.2, 0.8, 0.7);
+                    vec3 hydrogenColor = vec3(1.0, 0.2, 0.3);
+                    vec3 sulfurColor = vec3(0.9, 0.3, 0.2);
+
+                    float mixFactor = snoise(vPosition * 0.8);
+                    vec3 nebulaColor = mix(hydrogenColor, oxygenColor, mixFactor * 0.5 + 0.5);
+                    nebulaColor = mix(nebulaColor, sulfurColor, fingers * 0.3);
+
+                    nebulaColor *= filaments * (0.5 + fresnel);
+
+                    float alpha = filaments * fresnel * uVisible * 0.6;
+
+                    gl_FragColor = vec4(nebulaColor, alpha);
+                }
+            `
+        };
+
+        const nebulaMat = new THREE.ShaderMaterial({
+            uniforms: nebulaShader.uniforms,
+            vertexShader: nebulaShader.vertexShader,
+            fragmentShader: nebulaShader.fragmentShader,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const nebulaGeo = new THREE.IcosahedronGeometry(30, 5);
+        const nebula = new THREE.Mesh(nebulaGeo, nebulaMat);
+        scene.add(nebula);
+
+        // ═══════════════════════════════════════════════════════════════
+        // BACKGROUND STARS
+        // ═══════════════════════════════════════════════════════════════
+
+        const bgStarCount = 10000;
+        const bgStarGeo = new THREE.BufferGeometry();
+        const bgStarPositions = new Float32Array(bgStarCount * 3);
+        const bgStarColors = new Float32Array(bgStarCount * 3);
+
+        for (let i = 0; i < bgStarCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 1000 + Math.random() * 3000;
+
+            bgStarPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+            bgStarPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            bgStarPositions[i * 3 + 2] = r * Math.cos(phi);
+
+            const hue = Math.random() * 0.15;
+            const sat = Math.random() * 0.3;
+            const light = 0.6 + Math.random() * 0.4;
+            const col = new THREE.Color().setHSL(hue, sat, light);
+
+            bgStarColors[i * 3] = col.r;
+            bgStarColors[i * 3 + 1] = col.g;
+            bgStarColors[i * 3 + 2] = col.b;
+        }
+
+        bgStarGeo.setAttribute('position', new THREE.BufferAttribute(bgStarPositions, 3));
+        bgStarGeo.setAttribute('color', new THREE.BufferAttribute(bgStarColors, 3));
+
+        const bgStarMat = new THREE.PointsMaterial({
+            size: 1.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const bgStars = new THREE.Points(bgStarGeo, bgStarMat);
+        scene.add(bgStars);
+
+        // ═══════════════════════════════════════════════════════════════
+        // CONTROLS & UI
+        // ═══════════════════════════════════════════════════════════════
+
+        document.getElementById('time-slider').addEventListener('input', (e) => {
+            timeScale = parseFloat(e.target.value);
+            document.getElementById('time-val').textContent = `${timeScale.toFixed(1)}x`;
+        });
+
+        document.getElementById('energy-slider').addEventListener('input', (e) => {
+            explosionEnergy = parseFloat(e.target.value);
+            document.getElementById('energy-val').textContent = `${explosionEnergy.toFixed(1)} B`;
+        });
+
+        document.getElementById('mass-slider').addEventListener('input', (e) => {
+            progenitorMass = parseFloat(e.target.value);
+            document.getElementById('mass-val').textContent = `${progenitorMass} M☉`;
+            updateProgenitorSize();
+        });
+
+        document.getElementById('btn-trigger').addEventListener('click', triggerSupernova);
+        document.getElementById('btn-reset').addEventListener('click', resetSimulation);
+
+        // Keyboard control
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && currentPhase === PHASES.PRE_COLLAPSE) {
+                triggerSupernova();
+            }
+        });
+
+        function updateProgenitorSize() {
+            // Larger progenitor = larger envelope
+            const scaleFactor = progenitorMass / 20;
+            envelopeRadius = 25 * Math.pow(scaleFactor, 0.5);
+            envelope.geometry.dispose();
+            envelope.geometry = new THREE.SphereGeometry(envelopeRadius, 128, 128);
+        }
+
+        function triggerSupernova() {
+            if (currentPhase !== PHASES.PRE_COLLAPSE) return;
+            currentPhase = PHASES.CORE_COLLAPSE;
+            phaseTime = 0;
+            updatePhaseUI();
+        }
+
+        function resetSimulation() {
+            currentPhase = PHASES.PRE_COLLAPSE;
+            phaseTime = 0;
+            totalTime = 0;
+            shockRadius = 0;
+            shockVelocity = 0;
+            ejectaMass = 0;
+            luminosity = 1.2e5;
+            coreTemperature = 3.5e9;
+
+            // Reset visuals
+            ironCoreMat.uniforms.uCollapse.value = 0;
+            ironCoreMat.uniforms.uTemperature.value = 1.0;
+            shellMat.uniforms.uCollapse.value = 0;
+            shellMat.uniforms.uExpansion.value = 0;
+            shellMat.uniforms.uShockRadius.value = 0;
+            envelopeMat.uniforms.uExpansion.value = 0;
+            envelopeMat.uniforms.uDisruption.value = 0;
+            shockWave.visible = false;
+            shockWaveMat.uniforms.uRadius.value = 0;
+            ejectaMat.opacity = 0;
+            neutrinoMat.opacity = 0;
+            neutronStarMat.uniforms.uVisible.value = 0;
+            blackHoleMat.opacity = 0;
+            fallbackDiskMat.uniforms.uVisible.value = 0;
+            nebulaMat.uniforms.uVisible.value = 0;
+            nebulaMat.uniforms.uExpansion.value = 0;
+
+            // Reset gravitational lensing
+            lensingPass.uniforms.uLensingStrength.value = 0;
+
+            // Reset bloom transition
+            targetBloomStrength = 1.5;
+            currentBloomStrength = 1.5;
+            bloomPass.strength = 1.5;
+
+            // Reset flash
+            flashIntensity = 0;
+            flashFadeStartTime = -1;
+            flashPass.uniforms.uFlashIntensity.value = 0;
+
+            // Reset envelope
+            envelope.visible = true;
+            shell.visible = true;
+            ironCore.visible = true;
+
+            // Reset particle positions
+            const ejectaPos = ejecta.geometry.attributes.position.array;
+            const neutrinoPos = neutrinos.geometry.attributes.position.array;
+            for (let i = 0; i < ejectaCount * 3; i++) ejectaPos[i] = 0;
+            for (let i = 0; i < neutrinoCount * 3; i++) neutrinoPos[i] = 0;
+            ejecta.geometry.attributes.position.needsUpdate = true;
+            neutrinos.geometry.attributes.position.needsUpdate = true;
+
+            updatePhaseUI();
+            updateStatsUI();
+        }
+
+        function updatePhaseUI() {
+            const phaseNames = {
+                [PHASES.PRE_COLLAPSE]: 'Pre-Supernova Star',
+                [PHASES.CORE_COLLAPSE]: 'Core Collapse',
+                [PHASES.BOUNCE]: 'Core Bounce',
+                [PHASES.SHOCK_STALL]: 'Shock Stall',
+                [PHASES.SHOCK_REVIVAL]: 'Shock Revival',
+                [PHASES.SHOCK_BREAKOUT]: 'Shock Breakout',
+                [PHASES.EXPANSION]: 'Free Expansion',
+                [PHASES.REMNANT_FORMATION]: 'Remnant Formation'
+            };
+
+            const phaseDescs = {
+                [PHASES.PRE_COLLAPSE]: 'Massive star in final stages of silicon burning. Iron core approaching Chandrasekhar limit (~1.4 M☉).',
+                [PHASES.CORE_COLLAPSE]: 'Electron capture on iron nuclei. Core collapsing at ~0.25c. Photodisintegration consuming thermal energy.',
+                [PHASES.BOUNCE]: 'Core reaches nuclear density (2.7×10¹⁴ g/cm³). Strong nuclear force halts collapse. Bounce launches shock wave.',
+                [PHASES.SHOCK_STALL]: 'Shock loses energy to photodisintegration. Neutrino heating from proto-neutron star begins.',
+                [PHASES.SHOCK_REVIVAL]: 'Neutrino-driven convection revives shock. SASI instabilities develop. Explosion energy ~10⁵¹ erg.',
+                [PHASES.SHOCK_BREAKOUT]: 'Shock wave reaches stellar surface. UV/X-ray flash. Peak luminosity ~10¹⁰ L☉.',
+                [PHASES.EXPANSION]: 'Ejecta in free expansion phase. Nickel-56 decay powers plateau. Velocity ~10,000 km/s.',
+                [PHASES.REMNANT_FORMATION]: progenitorMass > 25 ?
+                    'Core exceeds Tolman-Oppenheimer-Volkoff limit. Black hole formation via fallback.' :
+                    'Proto-neutron star cooling. Rapid rotation (~30 ms period). Pulsar formation.'
+            };
+
+            document.getElementById('phase-name').textContent = phaseNames[currentPhase];
+            document.getElementById('phase-desc').textContent = phaseDescs[currentPhase];
+        }
+
+        function updateStatsUI() {
+            const timeStr = currentPhase === PHASES.PRE_COLLAPSE ?
+                'T - 0.00 s' :
+                `T + ${totalTime.toFixed(2)} s`;
+
+            document.getElementById('stat-time').textContent = timeStr;
+            document.getElementById('stat-temp').textContent = formatScientific(coreTemperature) + ' K';
+            document.getElementById('stat-velocity').textContent = Math.round(shockVelocity).toLocaleString() + ' km/s';
+            document.getElementById('stat-ejecta').textContent = ejectaMass.toFixed(1) + ' M☉';
+            document.getElementById('stat-luminosity').textContent = formatScientific(luminosity) + ' L☉';
+
+            let remnantStr = 'Forming...';
+            if (currentPhase === PHASES.REMNANT_FORMATION) {
+                remnantStr = progenitorMass > 25 ? 'Black Hole (~3-5 M☉)' : 'Neutron Star (~1.4 M☉)';
+            }
+            document.getElementById('stat-remnant').textContent = remnantStr;
+
+            // Progress bar
+            const phaseDurations = {
+                [PHASES.PRE_COLLAPSE]: 1,
+                [PHASES.CORE_COLLAPSE]: 0.5,
+                [PHASES.BOUNCE]: 0.3,
+                [PHASES.SHOCK_STALL]: 1.0,
+                [PHASES.SHOCK_REVIVAL]: 1.5,
+                [PHASES.SHOCK_BREAKOUT]: 0.5,
+                [PHASES.EXPANSION]: 5.0,
+                [PHASES.REMNANT_FORMATION]: 10.0
+            };
+            const progress = Math.min(100, (phaseTime / phaseDurations[currentPhase]) * 100);
+            document.getElementById('progress-fill').style.width = progress + '%';
+        }
+
+        function formatScientific(num) {
+            if (num < 1000) return num.toFixed(1);
+            const exp = Math.floor(Math.log10(num));
+            const mantissa = num / Math.pow(10, exp);
+            return `${mantissa.toFixed(1)} × 10^${exp}`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PHYSICS SIMULATION
+        // ═══════════════════════════════════════════════════════════════
+
+        function updatePhysics(deltaTime) {
+            const dt = deltaTime * timeScale;
+            phaseTime += dt;
+
+            if (currentPhase !== PHASES.PRE_COLLAPSE) {
+                totalTime += dt;
+            }
+
+            switch (currentPhase) {
+                case PHASES.PRE_COLLAPSE:
+                    // Stable star - slow convection
+                    break;
+
+                case PHASES.CORE_COLLAPSE:
+                    // Core collapse in ~100ms (scaled)
+                    const collapseProgress = Math.min(phaseTime / 0.5, 1.0);
+                    ironCoreMat.uniforms.uCollapse.value = collapseProgress;
+                    ironCoreMat.uniforms.uTemperature.value = 1.0 + collapseProgress * 9.0;
+                    coreTemperature = 3.5e9 * (1 + collapseProgress * 10);
+
+                    // Neutrino burst begins
+                    neutrinoMat.opacity = collapseProgress * 0.3;
+
+                    // Show neutron star / black hole immediately when supernova is triggered
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = collapseProgress * 0.3;
+                    } else {
+                        // Neutron star visible immediately at full intensity
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    if (phaseTime > 0.5) {
+                        currentPhase = PHASES.BOUNCE;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.BOUNCE:
+                    // Core bounce - shock wave launches
+                    const bounceProgress = Math.min(phaseTime / 0.3, 1.0);
+                    shockRadius = bounceProgress * 5;
+                    shockVelocity = 50000 * bounceProgress; // ~50,000 km/s initial
+
+                    shockWave.visible = true;
+                    shockWaveMat.uniforms.uRadius.value = shockRadius;
+                    shockWaveMat.uniforms.uIntensity.value = 2.0;
+
+                    shellMat.uniforms.uShockRadius.value = shockRadius;
+
+                    // Peak neutrino emission
+                    neutrinoMat.opacity = 0.5;
+                    luminosity = 1e10; // 10^10 L☉ in neutrinos!
+
+                    // Keep neutron star / black hole visible
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = 0.3 + bounceProgress * 0.2;
+                    } else {
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    if (phaseTime > 0.3) {
+                        currentPhase = PHASES.SHOCK_STALL;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.SHOCK_STALL:
+                    // Shock stalls at ~150 km, losing energy
+                    const stallProgress = Math.min(phaseTime / 1.0, 1.0);
+                    shockRadius = 5 + stallProgress * 2;
+                    shockVelocity = 50000 * (1 - stallProgress * 0.8);
+
+                    shockWaveMat.uniforms.uRadius.value = shockRadius;
+                    shockWaveMat.uniforms.uIntensity.value = 2.0 - stallProgress;
+
+                    // Core continues to contract
+                    ironCoreMat.uniforms.uCollapse.value = 1.0;
+
+                    // Keep neutron star / black hole visible
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = 0.5;
+                    } else {
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    if (phaseTime > 1.0) {
+                        currentPhase = PHASES.SHOCK_REVIVAL;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.SHOCK_REVIVAL:
+                    // Neutrino heating revives shock
+                    const revivalProgress = Math.min(phaseTime / 1.5, 1.0);
+                    shockRadius = 7 + revivalProgress * (envelopeRadius - 7);
+                    shockVelocity = 10000 + revivalProgress * 20000 * explosionEnergy;
+
+                    shockWaveMat.uniforms.uRadius.value = shockRadius;
+                    shockWaveMat.uniforms.uIntensity.value = 1.0 + revivalProgress * explosionEnergy;
+
+                    shellMat.uniforms.uShockRadius.value = shockRadius;
+                    shellMat.uniforms.uExpansion.value = revivalProgress * 0.5;
+
+                    // Ejecta begins
+                    ejectaMat.opacity = revivalProgress * 0.5;
+                    initializeEjecta(revivalProgress);
+
+                    // Neutrinos still streaming
+                    updateNeutrinos(dt);
+
+                    // Keep neutron star / black hole visible
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = 0.5 + revivalProgress * 0.2;
+                    } else {
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    if (phaseTime > 1.5) {
+                        currentPhase = PHASES.SHOCK_BREAKOUT;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.SHOCK_BREAKOUT:
+                    // Shock reaches surface - brilliant flash
+                    const breakoutProgress = Math.min(phaseTime / 0.5, 1.0);
+
+                    // Trigger the main bright flash at the very start of breakout
+                    if (phaseTime < 0.02 && flashIntensity === 0) {
+                        flashIntensity = 1.0; // Full white flash
+                        flashFadeStartTime = totalTime;
+                    }
+
+                    shockRadius = envelopeRadius + breakoutProgress * 20;
+                    shockWaveMat.uniforms.uRadius.value = shockRadius;
+                    shockWaveMat.uniforms.uIntensity.value = 3.0 * explosionEnergy * (1 - breakoutProgress * 0.5);
+
+                    envelopeMat.uniforms.uExpansion.value = breakoutProgress * 0.3;
+                    envelopeMat.uniforms.uDisruption.value = breakoutProgress * 0.5;
+
+                    // Peak luminosity
+                    luminosity = 1e10 * (1 - breakoutProgress * 0.9);
+
+                    // Full ejecta expansion - keep very visible
+                    ejectaMat.opacity = 1.0;
+                    updateEjecta(dt, breakoutProgress);
+
+                    // Start showing nebula at end of breakout for smoother transition
+                    if (breakoutProgress > 0.5) {
+                        nebulaMat.uniforms.uVisible.value = (breakoutProgress - 0.5) * 0.4;
+                        nebulaMat.uniforms.uExpansion.value = (breakoutProgress - 0.5) * 0.2;
+                    }
+
+                    // Keep neutron star / black hole visible
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = 0.7 + breakoutProgress * 0.1;
+                    } else {
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    // Smooth bloom transition - fade from peak over 0.25sec (half of breakout phase)
+                    // At start of breakout (progress=0), we're at peak brightness
+                    // Fade out smoothly over the 0.5s breakout phase
+                    targetBloomStrength = 2.5 * Math.exp(-breakoutProgress * 4.0) + 1.2;
+
+                    if (phaseTime > 0.5) {
+                        currentPhase = PHASES.EXPANSION;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.EXPANSION:
+                    // Free expansion - ejecta coasts outward
+                    const expansionProgress = Math.min(phaseTime / 5.0, 1.0);
+
+                    // Envelope disrupts completely but stays visible longer
+                    envelopeMat.uniforms.uExpansion.value = 0.3 + expansionProgress * 2.0;
+                    envelopeMat.uniforms.uDisruption.value = 0.5 + expansionProgress * 0.5;
+
+                    // Keep envelope visible longer - fade out gradually
+                    if (expansionProgress > 0.5) {
+                        envelope.visible = false;
+                        shell.visible = false;
+                    }
+
+                    // Shock wave fades smoothly
+                    shockRadius = envelopeRadius + 20 + expansionProgress * 100;
+                    shockWaveMat.uniforms.uRadius.value = shockRadius;
+                    // Smoother intensity falloff using exponential decay
+                    shockWaveMat.uniforms.uIntensity.value = 1.5 * Math.exp(-expansionProgress * 3.0);
+
+                    // Ejecta expands - keep it bright and visible
+                    updateEjecta(dt, 1.0);
+                    ejectaMat.opacity = Math.max(0.6, 1.0 - expansionProgress * 0.4); // Stay visible
+                    ejectaMass = (progenitorMass - 1.4) * expansionProgress;
+
+                    // Luminosity powered by Ni-56 decay - smoother transition
+                    luminosity = 1e9 * Math.exp(-expansionProgress * 2) + 5e8;
+
+                    // Velocity decreases as ejecta sweeps up CSM
+                    shockVelocity = 30000 * explosionEnergy * (1 - expansionProgress * 0.5);
+
+                    // Nebula begins forming - start earlier and more visible
+                    nebulaMat.uniforms.uVisible.value = 0.2 + expansionProgress * 0.5;
+                    nebulaMat.uniforms.uExpansion.value = expansionProgress;
+
+                    // Keep neutron star / black hole visible throughout
+                    if (progenitorMass > 25) {
+                        blackHoleMat.opacity = 0.8 + expansionProgress * 0.2;
+                    } else {
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                    }
+
+                    // Smooth bloom fadeout using exponential decay
+                    targetBloomStrength = 1.5 * Math.exp(-expansionProgress * 1.5) + 1.0;
+
+                    if (phaseTime > 5.0) {
+                        currentPhase = PHASES.REMNANT_FORMATION;
+                        phaseTime = 0;
+                        updatePhaseUI();
+                    }
+                    break;
+
+                case PHASES.REMNANT_FORMATION:
+                    // Final phase - remnant visible
+                    const remnantProgress = Math.min(phaseTime / 3.0, 1.0);
+
+                    // Cross-fade: core fades out as remnant fades in
+                    // Use a faster initial fade-in for the remnant so there's no gap
+                    const coreOpacity = Math.max(0, 1.0 - remnantProgress * 3.0); // Core fades out quickly
+                    const remnantOpacity = Math.min(1.0, remnantProgress * 2.0 + 0.3); // Remnant starts at 0.3 and fades in
+
+                    // Fade out the iron core rather than hiding it instantly
+                    ironCoreMat.uniforms.uTemperature.value = 10.0 * coreOpacity;
+                    ironCore.visible = coreOpacity > 0.01;
+
+                    if (progenitorMass > 25) {
+                        // Black hole formation with gravitational lensing
+                        blackHoleMat.opacity = remnantOpacity;
+                        fallbackDiskMat.uniforms.uVisible.value = remnantOpacity * 0.8;
+                        neutronStarMat.uniforms.uVisible.value = 0;
+
+                        // Enable gravitational lensing - smoothly fade in
+                        lensingPass.uniforms.uLensingStrength.value = remnantProgress;
+                    } else {
+                        // Neutron star - keep at full visibility (no fade, already visible from earlier phases)
+                        neutronStarMat.uniforms.uVisible.value = 1.0;
+                        blackHoleMat.opacity = 0;
+                        fallbackDiskMat.uniforms.uVisible.value = 0;
+                        lensingPass.uniforms.uLensingStrength.value = 0;
+                    }
+
+                    // Continue ejecta expansion
+                    updateEjecta(dt, 1.0);
+
+                    // Nebula fully visible
+                    nebulaMat.uniforms.uVisible.value = 0.3 + remnantProgress * 0.4;
+                    nebulaMat.uniforms.uExpansion.value = 1.0 + phaseTime * 0.1;
+
+                    // Luminosity settles to remnant + nebula
+                    luminosity = 1e6 + (progenitorMass > 25 ? 1e8 : 1e4);
+
+                    ejectaMass = progenitorMass - (progenitorMass > 25 ? 3 : 1.4);
+
+                    // Smooth bloom settling
+                    targetBloomStrength = 1.0;
+                    break;
+            }
+
+            updateStatsUI();
+        }
+
+        function initializeEjecta(progress) {
+            const ejectaPos = ejecta.geometry.attributes.position.array;
+
+            for (let i = 0; i < ejectaCount; i++) {
+                const vel = ejectaVelocities[i];
+                if (progress > vel.delay / 2.0) {
+                    const r = ejectaInitialRadii[i];
+                    const theta = Math.atan2(vel.y, vel.x);
+                    const phi = Math.acos(vel.z / Math.sqrt(vel.x*vel.x + vel.y*vel.y + vel.z*vel.z));
+
+                    ejectaPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                    ejectaPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                    ejectaPos[i * 3 + 2] = r * Math.cos(phi);
+                }
+            }
+
+            ejecta.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function updateEjecta(dt, intensity) {
+            const ejectaPos = ejecta.geometry.attributes.position.array;
+            const speedMult = explosionEnergy * intensity * 8.0;
+
+            for (let i = 0; i < ejectaCount; i++) {
+                const vel = ejectaVelocities[i];
+
+                ejectaPos[i * 3] += vel.x * dt * speedMult;
+                ejectaPos[i * 3 + 1] += vel.y * dt * speedMult;
+                ejectaPos[i * 3 + 2] += vel.z * dt * speedMult;
+            }
+
+            ejecta.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function updateNeutrinos(dt) {
+            const neutrinoPos = neutrinos.geometry.attributes.position.array;
+
+            for (let i = 0; i < neutrinoCount; i++) {
+                const vel = neutrinoVelocities[i];
+
+                neutrinoPos[i * 3] += vel.x * dt * 5.0;
+                neutrinoPos[i * 3 + 1] += vel.y * dt * 5.0;
+                neutrinoPos[i * 3 + 2] += vel.z * dt * 5.0;
+
+                // Neutrinos travel far and fast - reset if too far
+                const dist = Math.sqrt(
+                    neutrinoPos[i * 3] ** 2 +
+                    neutrinoPos[i * 3 + 1] ** 2 +
+                    neutrinoPos[i * 3 + 2] ** 2
+                );
+
+                if (dist > 200) {
+                    neutrinoPos[i * 3] = 0;
+                    neutrinoPos[i * 3 + 1] = 0;
+                    neutrinoPos[i * 3 + 2] = 0;
+                }
+            }
+
+            neutrinos.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ANIMATION LOOP
+        // ═══════════════════════════════════════════════════════════════
+
+        const clock = new THREE.Clock();
+
+        function updateBlackHoleScreenPosition() {
+            // Project black hole center to screen space for lensing shader
+            const vector = new THREE.Vector3(0, 0, 0);
+            vector.project(camera);
+
+            // Convert from NDC (-1 to 1) to UV (0 to 1)
+            const screenX = (vector.x + 1) / 2;
+            const screenY = (vector.y + 1) / 2;
+
+            lensingPass.uniforms.uBlackHolePos.value.set(screenX, screenY);
+
+            // Calculate apparent angular size of black hole
+            const distance = camera.position.length();
+            const fov = camera.fov * Math.PI / 180;
+            const screenHeight = 2 * Math.tan(fov / 2);
+
+            // Black hole radius in screen space (as fraction of screen height)
+            const bhRadius = 2; // Visual radius of the black hole
+            const apparentSize = (bhRadius / distance) / screenHeight;
+
+            lensingPass.uniforms.uBlackHoleRadius.value = apparentSize;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Update physics
+            updatePhysics(deltaTime);
+
+            // Smooth bloom strength interpolation for fadeout effect
+            currentBloomStrength += (targetBloomStrength - currentBloomStrength) * Math.min(deltaTime * bloomLerpSpeed, 1.0);
+            bloomPass.strength = currentBloomStrength;
+
+            // Update flash intensity for main bright explosion fadeout (0.25sec)
+            if (flashFadeStartTime >= 0 && flashIntensity > 0) {
+                const timeSinceFlash = totalTime - flashFadeStartTime;
+                if (timeSinceFlash < flashFadeDuration) {
+                    // Smooth exponential fadeout over 0.25 seconds
+                    flashIntensity = Math.exp(-timeSinceFlash / (flashFadeDuration * 0.3));
+                } else {
+                    flashIntensity = 0;
+                    flashFadeStartTime = -1;
+                }
+            }
+            flashPass.uniforms.uFlashIntensity.value = flashIntensity;
+
+            // Update shader uniforms
+            ironCoreMat.uniforms.uTime.value = time;
+            shellMat.uniforms.uTime.value = time;
+            envelopeMat.uniforms.uTime.value = time;
+            shockWaveMat.uniforms.uTime.value = time;
+            neutronStarMat.uniforms.uTime.value = time;
+            fallbackDiskMat.uniforms.uTime.value = time;
+            nebulaMat.uniforms.uTime.value = time;
+            lensingPass.uniforms.uTime.value = time;
+            lensingPass.uniforms.uAspect.value = window.innerWidth / window.innerHeight;
+
+            // Update black hole lensing position
+            if (progenitorMass > 25 && currentPhase === PHASES.REMNANT_FORMATION) {
+                updateBlackHoleScreenPosition();
+            }
+
+            // Rotate star slowly
+            if (currentPhase === PHASES.PRE_COLLAPSE) {
+                envelope.rotation.y = time * 0.02;
+                shell.rotation.y = time * 0.03;
+                ironCore.rotation.y = time * 0.05;
+            }
+
+            // Neutron star rapid rotation
+            if (neutronStarMat.uniforms.uVisible.value > 0) {
+                neutronStar.rotation.y = time * 10;
+            }
+
+            controls.update();
+            composer.render();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // RESIZE HANDLER
+        // ═══════════════════════════════════════════════════════════════
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize
+        updatePhaseUI();
+        updateStatsUI();
+        animate();
+    </script>
+</body>
+</html>
